@@ -779,10 +779,18 @@ class TestCallHandlerUnit:
 
         await hub.handle_websocket(ws)  # type: ignore[arg-type]
 
-        # Messages: WELCOME, RESULT, GOODBYE reply
+        # Messages: WELCOME, RESULT, GOODBYE reply (order may vary due to
+        # task-based handler execution — RESULT and GOODBYE may be interleaved)
         assert len(ws.sent_texts) == 3
 
-        result = json.loads(ws.sent_texts[1])
+        # Find the RESULT message regardless of position
+        result_msgs = [
+            json.loads(t)
+            for t in ws.sent_texts
+            if json.loads(t)[0] == WampMessageType.RESULT
+        ]
+        assert len(result_msgs) == 1
+        result = result_msgs[0]
         assert result[0] == WampMessageType.RESULT
         assert result[1] == 1
         assert result[3] == [8]

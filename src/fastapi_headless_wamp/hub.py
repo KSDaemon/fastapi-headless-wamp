@@ -17,6 +17,7 @@ from fastapi_headless_wamp.protocol import (
     WAMP_ERROR_RUNTIME_ERROR,
     WampMessageType,
     validate_call,
+    validate_cancel,
     validate_error,
     validate_register,
     validate_unregister,
@@ -282,6 +283,13 @@ class WampHub:
                 )
             )
             session.store_progressive_input_task(request_id, task)
+            # Also track as a running call task for CANCEL support
+            session.store_running_call_task(request_id, task)
+
+            def _on_prog_task_done(t: asyncio.Task[Any]) -> None:
+                session.remove_running_call_task(request_id)
+
+            task.add_done_callback(_on_prog_task_done)
             return
 
         # ------------------------------------------------------------------
@@ -301,9 +309,19 @@ class WampHub:
             await session.send_message(error_msg)
             return
 
-        await self._invoke_rpc_handler(
-            session, request_id, options, handler, call_args, call_kwargs, procedure
+        # Run handler in a task so the message loop can process CANCEL
+        task = asyncio.create_task(
+            self._invoke_rpc_handler(
+                session, request_id, options, handler, call_args, call_kwargs, procedure
+            )
         )
+        session.store_running_call_task(request_id, task)
+
+        # Add callback to clean up the task tracking when done
+        def _on_task_done(t: asyncio.Task[Any]) -> None:
+            session.remove_running_call_task(request_id)
+
+        task.add_done_callback(_on_task_done)
 
     async def _run_progressive_input_handler(
         self,
@@ -514,6 +532,10 @@ class WampHub:
                 result = await coro
 
         except asyncio.TimeoutError:
+            # If CANCEL already sent the ERROR, suppress duplicate
+            if session.is_request_cancelled(request_id):
+                session.clear_cancelled_request(request_id)
+                return
             error_msg: list[Any] = [
                 WampMessageType.ERROR,
                 WampMessageType.CALL,
@@ -524,6 +546,10 @@ class WampHub:
             await session.send_message(error_msg)
             return
         except asyncio.CancelledError:
+            # If CANCEL (skip/killnowait) already sent ERROR, suppress
+            if session.is_request_cancelled(request_id):
+                session.clear_cancelled_request(request_id)
+                return
             error_msg = [
                 WampMessageType.ERROR,
                 WampMessageType.CALL,
@@ -534,6 +560,10 @@ class WampHub:
             await session.send_message(error_msg)
             return
         except WampError as exc:
+            # If CANCEL already sent the ERROR, suppress
+            if session.is_request_cancelled(request_id):
+                session.clear_cancelled_request(request_id)
+                return
             # WAMP-typed exception from handler
             error_msg = [
                 WampMessageType.ERROR,
@@ -551,6 +581,10 @@ class WampHub:
             await session.send_message(error_msg)
             return
         except Exception as exc:
+            # If CANCEL already sent the ERROR, suppress
+            if session.is_request_cancelled(request_id):
+                session.clear_cancelled_request(request_id)
+                return
             logger.error(
                 "Session %d: RPC handler '%s' raised: %s",
                 session.session_id,
@@ -569,6 +603,11 @@ class WampHub:
             await session.send_message(error_msg)
             return
 
+        # If CANCEL (skip mode) already sent ERROR, suppress RESULT
+        if session.is_request_cancelled(request_id):
+            session.clear_cancelled_request(request_id)
+            return
+
         # Build final RESULT message (no progress flag)
         result_msg: list[Any] = [
             WampMessageType.RESULT,
@@ -578,6 +617,103 @@ class WampHub:
         if result is not None:
             result_msg.append([result])
         await session.send_message(result_msg)
+
+    # ------------------------------------------------------------------
+    # CANCEL handling (client cancels a pending CALL)
+    # ------------------------------------------------------------------
+
+    async def _handle_cancel(self, session: WampSession, msg: list[Any]) -> None:
+        """Handle a CANCEL message from the client.
+
+        CANCEL format: [CANCEL, CALL.Request|id, Options|dict]
+
+        Supported ``options.mode`` values:
+
+        * ``"skip"`` — Stop waiting for the result but let the handler
+          continue running in the background.  Send ERROR
+          ``wamp.error.canceled`` immediately.
+        * ``"kill"`` — Cancel the running asyncio task and wait for
+          cleanup to complete before sending ERROR ``wamp.error.canceled``.
+        * ``"killnowait"`` — Cancel the running asyncio task but send
+          ERROR ``wamp.error.canceled`` immediately without waiting for
+          the task to finish.
+
+        If no mode is specified the default behaviour is ``"kill"``.
+
+        If the handler has already completed by the time CANCEL arrives,
+        the CANCEL is silently ignored (the RESULT was already sent).
+        """
+        try:
+            validate_cancel(msg)
+        except WampError as exc:
+            logger.warning(
+                "Session %d: invalid CANCEL message: %s", session.session_id, exc
+            )
+            return
+
+        request_id: int = msg[1]
+        options: dict[str, Any] = msg[2]
+        mode: str = options.get("mode", "kill")
+
+        task = session.get_running_call_task(request_id)
+
+        if task is None or task.done():
+            # Handler already completed (RESULT was already sent) or
+            # no matching task — silently ignore the CANCEL.
+            logger.debug(
+                "Session %d: CANCEL for request %d ignored (no running task)",
+                session.session_id,
+                request_id,
+            )
+            return
+
+        if mode == "skip":
+            # Stop waiting: send ERROR immediately, let handler continue
+            session.mark_request_cancelled(request_id)
+            error_msg: list[Any] = [
+                WampMessageType.ERROR,
+                WampMessageType.CALL,
+                request_id,
+                {},
+                WAMP_ERROR_CANCELED,
+            ]
+            await session.send_message(error_msg)
+            logger.info(
+                "Session %d: CANCEL (skip) for request %d — "
+                "sent canceled error, handler still running",
+                session.session_id,
+                request_id,
+            )
+        elif mode == "killnowait":
+            # Cancel the task and send ERROR immediately without waiting
+            session.mark_request_cancelled(request_id)
+            task.cancel()
+            error_msg = [
+                WampMessageType.ERROR,
+                WampMessageType.CALL,
+                request_id,
+                {},
+                WAMP_ERROR_CANCELED,
+            ]
+            await session.send_message(error_msg)
+            logger.info(
+                "Session %d: CANCEL (killnowait) for request %d — "
+                "task cancelled, sent canceled error",
+                session.session_id,
+                request_id,
+            )
+        else:
+            # Default "kill" mode: cancel the task and wait for it to finish.
+            # The task's CancelledError handler will send the ERROR message.
+            task.cancel()
+            logger.info(
+                "Session %d: CANCEL (kill) for request %d — "
+                "task cancelled, awaiting cleanup",
+                session.session_id,
+                request_id,
+            )
+            # Note: the _invoke_rpc_handler already handles CancelledError
+            # and sends ERROR wamp.error.canceled, so we don't send it here.
 
     # ------------------------------------------------------------------
     # Client REGISTER / UNREGISTER handling (client-side RPCs)
@@ -826,6 +962,22 @@ class WampHub:
         except Exception as exc:
             logger.error("Hub: session %d error: %s", session.session_id, exc)
         finally:
+            # Wait for any running handler tasks to complete (or cancel)
+            # before firing close callbacks and cleanup.  This ensures
+            # fast handlers that are already in-flight get a chance to
+            # send their RESULT/ERROR before the session is torn down.
+            running_tasks = [
+                t for t in session.get_all_running_call_tasks() if not t.done()
+            ]
+            if running_tasks:
+                # Give running tasks a short grace period to finish
+                _done, pending = await asyncio.wait(running_tasks, timeout=1.0)
+                for t in pending:
+                    t.cancel()
+                # Wait for cancellation to propagate
+                if pending:
+                    await asyncio.wait(pending, timeout=1.0)
+
             # Fire on_session_close callbacks before cleanup
             await self._fire_session_close(session)
 
@@ -863,6 +1015,8 @@ class WampHub:
                 break
             elif msg_type == WampMessageType.CALL:
                 await self._handle_call(session, msg)
+            elif msg_type == WampMessageType.CANCEL:
+                await self._handle_cancel(session, msg)
             elif msg_type == WampMessageType.REGISTER:
                 await self._handle_register(session, msg)
             elif msg_type == WampMessageType.UNREGISTER:

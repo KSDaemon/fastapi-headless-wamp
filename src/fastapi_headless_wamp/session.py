@@ -189,6 +189,14 @@ class WampSession:
         # Tasks for progressive call handlers: request_id -> running handler task
         self._progressive_input_tasks: dict[int, asyncio.Task[Any]] = _int_task_dict()
 
+        # Running handler tasks for client CALLs: request_id -> task
+        # Used by CANCEL to cancel in-flight handlers
+        self._running_call_tasks: dict[int, asyncio.Task[Any]] = _int_task_dict()
+
+        # Request IDs where ERROR was already sent by CANCEL handler
+        # (skip/killnowait modes); handler should suppress RESULT/ERROR
+        self._cancelled_request_ids: set[int] = set()
+
         # Counter for server-initiated request IDs (separate from client IDs)
         self._request_id_counter: int = 0
 
@@ -501,6 +509,45 @@ class WampSession:
         self._progressive_input_queues.pop(request_id, None)
         self._progressive_input_tasks.pop(request_id, None)
 
+    # ------------------------------------------------------------------
+    # Running call task tracking (for CANCEL support)
+    # ------------------------------------------------------------------
+
+    def store_running_call_task(self, request_id: int, task: asyncio.Task[Any]) -> None:
+        """Store a running handler task for a client CALL.
+
+        Used by the hub to track in-flight handler tasks so they can be
+        cancelled when a CANCEL message arrives.
+        """
+        self._running_call_tasks[request_id] = task
+
+    def get_running_call_task(self, request_id: int) -> asyncio.Task[Any] | None:
+        """Return the running handler task for *request_id*, if any."""
+        return self._running_call_tasks.get(request_id)
+
+    def remove_running_call_task(self, request_id: int) -> None:
+        """Remove the running handler task for *request_id*."""
+        self._running_call_tasks.pop(request_id, None)
+
+    def get_all_running_call_tasks(self) -> list[asyncio.Task[Any]]:
+        """Return all currently running call handler tasks."""
+        return list(self._running_call_tasks.values())
+
+    def mark_request_cancelled(self, request_id: int) -> None:
+        """Mark *request_id* as cancelled (ERROR already sent by CANCEL handler).
+
+        The RPC handler should suppress sending RESULT/ERROR for this request.
+        """
+        self._cancelled_request_ids.add(request_id)
+
+    def is_request_cancelled(self, request_id: int) -> bool:
+        """Check whether *request_id* has been cancelled (ERROR already sent)."""
+        return request_id in self._cancelled_request_ids
+
+    def clear_cancelled_request(self, request_id: int) -> None:
+        """Remove *request_id* from the cancelled set."""
+        self._cancelled_request_ids.discard(request_id)
+
     def resolve_pending_call(self, request_id: int, result: Any) -> None:
         """Resolve a pending call future with a successful result.
 
@@ -582,6 +629,16 @@ class WampSession:
                     request_id,
                 )
 
+        # Cancel all running call handler tasks
+        for request_id, task in self._running_call_tasks.items():
+            if not task.done():
+                task.cancel()
+                logger.debug(
+                    "Session %d: cancelled running call task %d",
+                    self.session_id,
+                    request_id,
+                )
+
         # Cancel all progressive input tasks and signal end to queues
         for request_id, task in self._progressive_input_tasks.items():
             if not task.done():
@@ -606,5 +663,7 @@ class WampSession:
         self._pending_progress_callbacks.clear()
         self._progressive_input_queues.clear()
         self._progressive_input_tasks.clear()
+        self._running_call_tasks.clear()
+        self._cancelled_request_ids.clear()
 
         logger.debug("Session %d: cleanup complete", self.session_id)
