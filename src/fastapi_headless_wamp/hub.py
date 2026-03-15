@@ -10,7 +10,7 @@ from typing import Any
 
 from starlette.websockets import WebSocket, WebSocketDisconnect
 
-from fastapi_headless_wamp.errors import WampError
+from fastapi_headless_wamp.errors import WampCanceled, WampError
 from fastapi_headless_wamp.protocol import (
     WAMP_ERROR_CANCELED,
     WAMP_ERROR_NO_SUCH_PROCEDURE,
@@ -901,9 +901,19 @@ class WampHub:
         error_kwargs: dict[str, Any] = msg[6] if len(msg) > 6 else {}
 
         error_message = error_args[0] if error_args else error_uri
-        exception = WampError(str(error_message), args=error_args, kwargs=error_kwargs)
-        # Set the URI from the error message
-        exception.uri = error_uri
+
+        # Use WampCanceled for the canceled error URI so callers can
+        # distinguish cancellation from other errors.
+        if error_uri == WAMP_ERROR_CANCELED:
+            exception: WampError = WampCanceled(
+                str(error_message), args=error_args, kwargs=error_kwargs
+            )
+        else:
+            exception = WampError(
+                str(error_message), args=error_args, kwargs=error_kwargs
+            )
+            # Set the URI from the error message
+            exception.uri = error_uri
 
         session.reject_pending_call(request_id, exception)
 

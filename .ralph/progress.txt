@@ -48,6 +48,8 @@ Started: воскресенье, 15 марта 2026 г. 21:55:12 (EET)
 - For CANCEL support: `_running_call_tasks` tracks handler tasks per-session; `_cancelled_request_ids` set suppresses duplicate ERROR/RESULT when CANCEL (skip/killnowait) already sent ERROR
 - `handle_websocket()` awaits running handler tasks (1s grace) before cleanup to allow fast handlers to complete before session teardown
 - Use public accessor methods (`get_all_running_call_tasks()`, `mark_request_cancelled()`, etc.) instead of accessing private WampSession attributes from hub — pyright strict mode flags cross-class private access
+- `session.cancel(request_id)` only sends CANCEL if `request_id` is in `pending_calls` — no state tracking needed since YIELD/ERROR dispatch handles both outcomes
+- `_handle_invocation_error()` uses `WampCanceled` for `wamp.error.canceled` URI, generic `WampError` for others — callers can catch specific cancellation
 
 ## 2026-03-15 21:57 (EET) - US-001
 - What was implemented: Full project scaffolding with pyproject.toml, source layout, all module stubs, LICENSE, NOTICE, .gitignore, and package exports
@@ -287,4 +289,19 @@ Started: воскресенье, 15 марта 2026 г. 21:55:12 (EET)
   - `task.add_done_callback()` is used to auto-clean `_running_call_tasks` when a handler task finishes, so CANCEL after completion finds no task and is silently ignored
   - Tests for cancellation need `asyncio.Event` synchronization — handler sets event when started, test awaits it before sending CANCEL, to avoid race conditions
   - Sync handlers via `asyncio.to_thread()` can't be truly interrupted by task.cancel() — use killnowait mode to at least send the ERROR immediately
+---
+
+## 2026-03-15 36:00 (EET) - US-016
+- What was implemented: Server cancels call to client — `session.cancel(request_id, mode)` sends CANCEL message to the client for a pending server-to-client call. Hub's `_handle_invocation_error()` now uses `WampCanceled` when the error URI is `wamp.error.canceled`, so callers can distinguish cancellation from other errors. If client responds with YIELD despite CANCEL, the result is returned normally. Documented wampy.js limitation (callee does not handle INTERRUPT).
+- Files changed:
+  - src/fastapi_headless_wamp/session.py (added `cancel()` async method on WampSession: checks pending_calls, sends CANCEL with mode option, includes docstring documenting wampy.js limitation)
+  - src/fastapi_headless_wamp/hub.py (added `WampCanceled` import; updated `_handle_invocation_error()` to create `WampCanceled` exception when error URI is `wamp.error.canceled` instead of generic `WampError`)
+  - tests/test_cancel_server.py (new: 12 tests covering cancel sends CANCEL message, custom mode, non-existent request no-op, client ERROR canceled → WampCanceled raised, WampCanceled IS-A WampError, client YIELD despite cancel → result returned, complex result, non-canceled error after cancel, dispatch loop integration for both ERROR and YIELD paths, FastAPI integration for both canceled and normal-completion flows)
+  - .ralph/prd.json (US-016 passes: true)
+- **Learnings for future iterations:**
+  - `session.cancel()` is a simple method — it checks `pending_calls` and sends CANCEL; no need to track cancel state because the existing YIELD/ERROR handling already covers both outcomes
+  - `_handle_invocation_error()` was the right place to distinguish `WampCanceled` from `WampError` — checking `error_uri == WAMP_ERROR_CANCELED` at the point of rejection ensures callers get the specific exception type
+  - The CANCEL message format is `[CANCEL, request_id, {mode: "kill"}]` — same format as client-to-server CANCEL
+  - wampy.js callee does not handle INTERRUPT, so the server can only "request" cancellation; the client may respond with YIELD or ERROR regardless
+  - No dispatch loop changes needed — CANCEL is sent outbound by the server, and the client's response (YIELD/ERROR) is already handled by existing dispatch logic
 ---

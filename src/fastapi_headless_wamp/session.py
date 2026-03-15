@@ -470,6 +470,52 @@ class WampSession:
 
         return result
 
+    async def cancel(self, request_id: int, mode: str = "kill") -> None:
+        """Cancel a pending server-to-client call.
+
+        Sends a CANCEL message to the client for the given *request_id*.
+
+        The WAMP spec uses INTERRUPT to cancel an INVOCATION that is in
+        progress on the callee side.  However, **wampy.js does not handle
+        INTERRUPT** on the callee side, so the client may not abort
+        mid-execution.  The server simply sends CANCEL to signal intent;
+        the client may respond with ERROR ``wamp.error.canceled`` or
+        may complete the call normally (in which case the result is
+        returned as usual).
+
+        Args:
+            request_id: The request ID of the pending INVOCATION.
+            mode: Cancel mode — ``"kill"`` (default), ``"skip"``, or
+                ``"killnowait"``.  This is passed in the options dict
+                of the CANCEL message.
+
+        Note:
+            **Known wampy.js limitation:** the callee side does not
+            handle INTERRUPT, so the client may not actually abort the
+            procedure execution.  The server sends CANCEL/INTERRUPT as
+            a hint, but must still be prepared for a normal YIELD.
+        """
+        if request_id not in self.pending_calls:
+            logger.debug(
+                "Session %d: cancel(%d) — no pending call, ignoring",
+                self.session_id,
+                request_id,
+            )
+            return
+
+        cancel_msg: list[Any] = [
+            WampMessageType.CANCEL,
+            request_id,
+            {"mode": mode},
+        ]
+        await self.send_message(cancel_msg)
+        logger.info(
+            "Session %d: sent CANCEL for request %d (mode=%s)",
+            self.session_id,
+            request_id,
+            mode,
+        )
+
     def get_progress_callback(self, request_id: int) -> ProgressCallback | None:
         """Return the on_progress callback for *request_id*, if any."""
         return self._pending_progress_callbacks.get(request_id)
