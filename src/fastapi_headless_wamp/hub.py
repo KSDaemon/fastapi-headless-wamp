@@ -23,7 +23,13 @@ from fastapi_headless_wamp.protocol import (
     validate_yield,
 )
 from fastapi_headless_wamp.service import WampService
-from fastapi_headless_wamp.session import RpcHandler, WampSession, negotiate_subprotocol
+from fastapi_headless_wamp.session import (
+    PROGRESSIVE_INPUT_END,
+    ProgressiveCallInput,
+    RpcHandler,
+    WampSession,
+    negotiate_subprotocol,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -206,14 +212,17 @@ class WampHub:
         Looks up the procedure URI in the hub's server RPC registry,
         invokes the handler, and sends RESULT or ERROR back.
 
-        Supports progressive call results: when the client sends
-        ``receive_progress: true`` in the CALL options, the handler
-        receives a ``_progress`` callback parameter that can be awaited
-        to send intermediate RESULT messages with ``progress: true``
-        in the details dict.  The handler's final return value is sent
-        as the last RESULT (without the progress flag).
+        Supports three progressive features:
 
-        When ``receive_progress`` is not set, ``_progress`` is ``None``.
+        1. **Progressive call results** (US-012): when the client sends
+           ``receive_progress: true`` in the CALL options, the handler
+           receives a ``_progress`` callback to send intermediate RESULTs.
+
+        2. **Progressive call invocations** (US-014): when the client
+           sends multiple CALL messages with the same ``request_id`` and
+           ``options.progress = true``, the server accumulates chunks and
+           passes an ``_input_chunks`` async iterator to the handler.  The
+           final CALL (without the progress flag) signals end of input.
         """
         try:
             validate_call(msg)
@@ -229,10 +238,60 @@ class WampHub:
         call_args: list[Any] = msg[4] if len(msg) > 4 else []
         call_kwargs: dict[str, Any] = msg[5] if len(msg) > 5 else {}
 
+        is_progressive_input = bool(options.get("progress"))
+
+        # ------------------------------------------------------------------
+        # Progressive call invocations (client streams input to server)
+        # ------------------------------------------------------------------
+
+        # Case: subsequent progressive CALL (queue already exists)
+        if session.has_progressive_input(request_id):
+            queue = session.get_progressive_input_queue(request_id)
+            if queue is not None:
+                if is_progressive_input:
+                    # Intermediate chunk
+                    queue.put_nowait((call_args, call_kwargs))
+                else:
+                    # Final chunk: push data then signal end
+                    queue.put_nowait((call_args, call_kwargs))
+                    queue.put_nowait(PROGRESSIVE_INPUT_END)
+            return
+
+        # Case: first progressive CALL (start new handler)
+        if is_progressive_input:
+            handler = self._server_rpcs.get(procedure)
+            if handler is None:
+                error_msg: list[Any] = [
+                    WampMessageType.ERROR,
+                    WampMessageType.CALL,
+                    request_id,
+                    {},
+                    WAMP_ERROR_NO_SUCH_PROCEDURE,
+                ]
+                await session.send_message(error_msg)
+                return
+
+            queue, input_iter = session.create_progressive_input(request_id)
+            # Push the first chunk
+            queue.put_nowait((call_args, call_kwargs))
+
+            # Launch handler in a task so we can continue processing messages
+            task = asyncio.create_task(
+                self._run_progressive_input_handler(
+                    session, request_id, options, handler, input_iter
+                )
+            )
+            session.store_progressive_input_task(request_id, task)
+            return
+
+        # ------------------------------------------------------------------
+        # Regular (non-progressive input) CALL handling
+        # ------------------------------------------------------------------
+
         # Look up handler
         handler = self._server_rpcs.get(procedure)
         if handler is None:
-            error_msg: list[Any] = [
+            error_msg = [
                 WampMessageType.ERROR,
                 WampMessageType.CALL,
                 request_id,
@@ -242,6 +301,164 @@ class WampHub:
             await session.send_message(error_msg)
             return
 
+        await self._invoke_rpc_handler(
+            session, request_id, options, handler, call_args, call_kwargs, procedure
+        )
+
+    async def _run_progressive_input_handler(
+        self,
+        session: WampSession,
+        request_id: int,
+        options: dict[str, Any],
+        handler: RpcHandler,
+        input_iter: ProgressiveCallInput,
+    ) -> None:
+        """Run an RPC handler with progressive call input.
+
+        The handler receives an ``_input_chunks`` parameter that is an
+        async iterator yielding ``(args, kwargs)`` tuples for each
+        progressive CALL from the client.
+
+        The handler's final return value is sent as a RESULT.
+        """
+        try:
+            # For progressive input handlers, only inject special kwargs
+            # (not the CALL data kwargs — those come via the iterator)
+            caller_kwargs: dict[str, Any] = {}
+            if options.get("disclose_me"):
+                caller_kwargs["_caller_session_id"] = session.session_id
+
+            # Progressive call results: also support _progress for output
+            receive_progress = bool(options.get("receive_progress"))
+            sig = inspect.signature(handler)
+            handler_accepts_progress = "_progress" in sig.parameters or any(
+                p.kind == inspect.Parameter.VAR_KEYWORD for p in sig.parameters.values()
+            )
+
+            if receive_progress and handler_accepts_progress:
+
+                async def _progress_callback(data: Any) -> None:
+                    progress_msg: list[Any] = [
+                        WampMessageType.RESULT,
+                        request_id,
+                        {"progress": True},
+                    ]
+                    if data is not None:
+                        progress_msg.append([data])
+                    await session.send_message(progress_msg)
+
+                caller_kwargs["_progress"] = _progress_callback
+            elif handler_accepts_progress:
+                caller_kwargs["_progress"] = None
+
+            # Inject _input_chunks if handler accepts it
+            handler_accepts_input = "_input_chunks" in sig.parameters or any(
+                p.kind == inspect.Parameter.VAR_KEYWORD for p in sig.parameters.values()
+            )
+            if handler_accepts_input:
+                caller_kwargs["_input_chunks"] = input_iter
+
+            # Determine timeout
+            timeout_ms = options.get("timeout")
+            timeout_s: float | None = None
+            if (
+                timeout_ms is not None
+                and isinstance(timeout_ms, (int, float))
+                and timeout_ms > 0
+            ):
+                timeout_s = timeout_ms / 1000.0
+
+            if inspect.iscoroutinefunction(handler):
+                coro = handler(**caller_kwargs)
+            else:
+                coro = asyncio.to_thread(handler, **caller_kwargs)
+
+            if timeout_s is not None:
+                result = await asyncio.wait_for(coro, timeout=timeout_s)
+            else:
+                result = await coro
+
+        except asyncio.TimeoutError:
+            error_msg: list[Any] = [
+                WampMessageType.ERROR,
+                WampMessageType.CALL,
+                request_id,
+                {},
+                WAMP_ERROR_CANCELED,
+            ]
+            await session.send_message(error_msg)
+            return
+        except asyncio.CancelledError:
+            error_msg = [
+                WampMessageType.ERROR,
+                WampMessageType.CALL,
+                request_id,
+                {},
+                WAMP_ERROR_CANCELED,
+            ]
+            await session.send_message(error_msg)
+            return
+        except WampError as exc:
+            error_msg = [
+                WampMessageType.ERROR,
+                WampMessageType.CALL,
+                request_id,
+                {},
+                exc.uri,
+            ]
+            if exc.wamp_args:
+                error_msg.append(exc.wamp_args)
+            if exc.wamp_kwargs:
+                if len(error_msg) == 5:
+                    error_msg.append([])
+                error_msg.append(exc.wamp_kwargs)
+            await session.send_message(error_msg)
+            return
+        except Exception as exc:
+            logger.error(
+                "Session %d: progressive RPC handler raised: %s",
+                session.session_id,
+                exc,
+                exc_info=True,
+            )
+            error_msg = [
+                WampMessageType.ERROR,
+                WampMessageType.CALL,
+                request_id,
+                {},
+                WAMP_ERROR_RUNTIME_ERROR,
+                [str(exc)],
+            ]
+            await session.send_message(error_msg)
+            return
+        finally:
+            session.cleanup_progressive_input(request_id)
+
+        # Build final RESULT
+        result_msg: list[Any] = [
+            WampMessageType.RESULT,
+            request_id,
+            {},
+        ]
+        if result is not None:
+            result_msg.append([result])
+        await session.send_message(result_msg)
+
+    async def _invoke_rpc_handler(
+        self,
+        session: WampSession,
+        request_id: int,
+        options: dict[str, Any],
+        handler: RpcHandler,
+        call_args: list[Any],
+        call_kwargs: dict[str, Any],
+        procedure: str = "",
+    ) -> None:
+        """Invoke a regular (non-progressive-input) RPC handler.
+
+        Handles caller_identification, progressive call results,
+        timeout, and error handling.
+        """
         # caller_identification: pass caller session ID if disclose_me is set
         caller_kwargs = dict(call_kwargs)
         if options.get("disclose_me"):
@@ -297,7 +514,7 @@ class WampHub:
                 result = await coro
 
         except asyncio.TimeoutError:
-            error_msg = [
+            error_msg: list[Any] = [
                 WampMessageType.ERROR,
                 WampMessageType.CALL,
                 request_id,

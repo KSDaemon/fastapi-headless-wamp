@@ -22,7 +22,7 @@ from fastapi_headless_wamp.serializers import (
     register_serializer,
 )
 from fastapi_headless_wamp.service import WampService, rpc, subscribe
-from fastapi_headless_wamp.session import WampSession
+from fastapi_headless_wamp.session import ProgressiveCallInput, WampSession
 
 # Configure logging with NullHandler to prevent "No handler found" warnings
 logging.getLogger("fastapi_headless_wamp").addHandler(logging.NullHandler())
@@ -32,6 +32,7 @@ __all__ = [
     "WampHub",
     "WampSession",
     "WampService",
+    "ProgressiveCallInput",
     # Decorators
     "rpc",
     "subscribe",

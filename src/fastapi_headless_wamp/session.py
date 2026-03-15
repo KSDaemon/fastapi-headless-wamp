@@ -15,6 +15,9 @@ from fastapi_headless_wamp.errors import (
     WampError,
     WampNoSuchProcedure,
 )
+
+# Sentinel value to signal end of progressive input stream
+PROGRESSIVE_INPUT_END = object()
 from fastapi_headless_wamp.protocol import (
     WAMP_ERROR_CLOSE_REALM,
     WAMP_ERROR_GOODBYE_AND_OUT,
@@ -72,6 +75,49 @@ def _int_sub_dict() -> dict[int, str]:
 
 def _int_progress_dict() -> dict[int, ProgressCallback]:
     return {}
+
+
+def _int_queue_dict() -> dict[int, asyncio.Queue[Any]]:
+    return {}
+
+
+def _int_task_dict() -> dict[int, asyncio.Task[Any]]:
+    return {}
+
+
+class ProgressiveCallInput:
+    """Async iterator over progressive CALL input chunks.
+
+    RPC handlers receive an instance of this class as the
+    ``_input_chunks`` parameter when a client sends progressive CALLs
+    (multiple CALL messages with the same ``request_id`` and
+    ``options.progress = true``).
+
+    Usage in a handler::
+
+        async def my_handler(_input_chunks: ProgressiveCallInput | None = None) -> str:
+            if _input_chunks is not None:
+                async for chunk_args, chunk_kwargs in _input_chunks:
+                    process(chunk_args, chunk_kwargs)
+            return "done"
+
+    Each iteration yields a tuple ``(args: list[Any], kwargs: dict[str, Any])``
+    from the progressive CALL message.
+    """
+
+    def __init__(self, queue: asyncio.Queue[Any]) -> None:
+        self._queue = queue
+
+    def __aiter__(self) -> ProgressiveCallInput:
+        return self
+
+    async def __anext__(self) -> tuple[list[Any], dict[str, Any]]:
+        item = await self._queue.get()
+        if item is PROGRESSIVE_INPUT_END:
+            raise StopAsyncIteration
+        args: list[Any] = item[0]
+        kwargs: dict[str, Any] = item[1]
+        return args, kwargs
 
 
 def negotiate_subprotocol(
@@ -135,6 +181,13 @@ class WampSession:
         self._pending_progress_callbacks: dict[int, ProgressCallback] = (
             _int_progress_dict()
         )
+
+        # Progressive call input state: request_id -> queue for incoming chunks
+        self._progressive_input_queues: dict[int, asyncio.Queue[Any]] = (
+            _int_queue_dict()
+        )
+        # Tasks for progressive call handlers: request_id -> running handler task
+        self._progressive_input_tasks: dict[int, asyncio.Task[Any]] = _int_task_dict()
 
         # Counter for server-initiated request IDs (separate from client IDs)
         self._request_id_counter: int = 0
@@ -413,6 +466,41 @@ class WampSession:
         """Return the on_progress callback for *request_id*, if any."""
         return self._pending_progress_callbacks.get(request_id)
 
+    # ------------------------------------------------------------------
+    # Progressive call input (client streams chunks to server)
+    # ------------------------------------------------------------------
+
+    def has_progressive_input(self, request_id: int) -> bool:
+        """Check if a progressive input stream is active for *request_id*."""
+        return request_id in self._progressive_input_queues
+
+    def create_progressive_input(
+        self, request_id: int
+    ) -> tuple[asyncio.Queue[Any], ProgressiveCallInput]:
+        """Create a new progressive input queue and iterator for *request_id*.
+
+        Returns ``(queue, iterator)`` where *queue* is used by the hub to
+        push incoming chunks and *iterator* is passed to the RPC handler.
+        """
+        queue: asyncio.Queue[Any] = asyncio.Queue()
+        self._progressive_input_queues[request_id] = queue
+        return queue, ProgressiveCallInput(queue)
+
+    def get_progressive_input_queue(self, request_id: int) -> asyncio.Queue[Any] | None:
+        """Return the progressive input queue for *request_id*, if any."""
+        return self._progressive_input_queues.get(request_id)
+
+    def store_progressive_input_task(
+        self, request_id: int, task: asyncio.Task[Any]
+    ) -> None:
+        """Store the handler task for a progressive call input."""
+        self._progressive_input_tasks[request_id] = task
+
+    def cleanup_progressive_input(self, request_id: int) -> None:
+        """Clean up progressive input state for *request_id*."""
+        self._progressive_input_queues.pop(request_id, None)
+        self._progressive_input_tasks.pop(request_id, None)
+
     def resolve_pending_call(self, request_id: int, result: Any) -> None:
         """Resolve a pending call future with a successful result.
 
@@ -477,8 +565,8 @@ class WampSession:
     def cleanup(self) -> None:
         """Clean up session state.
 
-        Clears all maps, rejects pending call futures, and marks the
-        session as closed.
+        Clears all maps, rejects pending call futures, cancels progressive
+        input tasks, and marks the session as closed.
         """
         self.is_open = False
 
@@ -494,6 +582,19 @@ class WampSession:
                     request_id,
                 )
 
+        # Cancel all progressive input tasks and signal end to queues
+        for request_id, task in self._progressive_input_tasks.items():
+            if not task.done():
+                task.cancel()
+                logger.debug(
+                    "Session %d: cancelled progressive input task %d",
+                    self.session_id,
+                    request_id,
+                )
+        for queue in self._progressive_input_queues.values():
+            # Signal end so any waiting handler unblocks
+            queue.put_nowait(PROGRESSIVE_INPUT_END)
+
         # Clear all state maps
         self.server_rpcs.clear()
         self.client_rpcs.clear()
@@ -503,5 +604,7 @@ class WampSession:
         self.server_subscriptions.clear()
         self.pending_calls.clear()
         self._pending_progress_callbacks.clear()
+        self._progressive_input_queues.clear()
+        self._progressive_input_tasks.clear()
 
         logger.debug("Session %d: cleanup complete", self.session_id)
