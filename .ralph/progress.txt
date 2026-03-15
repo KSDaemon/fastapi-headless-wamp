@@ -52,6 +52,9 @@ Started: воскресенье, 15 марта 2026 г. 21:55:12 (EET)
 - `_handle_invocation_error()` uses `WampCanceled` for `wamp.error.canceled` URI, generic `WampError` for others — callers can catch specific cancellation
 - Client SUBSCRIBE/UNSUBSCRIBE: hub stores subscriptions in per-session `subscriptions` (sub_id→topic) and `subscription_uris` (topic→sub_id) maps; `_generate_subscription_id()` on hub provides globally unique IDs
 - When adding new message handlers to the dispatch loop, update the `test_unhandled_message_type_logged_not_crashed` test in test_hub.py to use a different still-unhandled message type (changed from SUBSCRIBE to PUBLISH)
+- `session.publish(topic, args, kwargs, publisher)` sends EVENT only if the client has subscribed to the topic; otherwise it's a no-op (no error)
+- Publication IDs are per-session incrementing counters (`_publication_id_counter`), not hub-global
+- `hub.publish_to_all(topic, args, kwargs, publisher)` iterates all active sessions and calls `session.publish()` on each; catches exceptions per-session to avoid one failure stopping others
 
 ## 2026-03-15 21:57 (EET) - US-001
 - What was implemented: Full project scaffolding with pyproject.toml, source layout, all module stubs, LICENSE, NOTICE, .gitignore, and package exports
@@ -322,4 +325,20 @@ Started: воскресенье, 15 марта 2026 г. 21:55:12 (EET)
   - Cleanup is handled by existing `session.cleanup()` in the finally block of `handle_websocket()` — no additional cleanup code needed
   - When inspecting session state mid-connection in tests, capture state inside the hooked loop rather than using asyncio.Event synchronization — the event-based approach races with cleanup because `original_loop` may process GOODBYE and trigger cleanup before test assertions run
   - When adding new message type handlers, always update `test_unhandled_message_type_logged_not_crashed` to use a different still-unhandled type (changed from SUBSCRIBE to PUBLISH)
+---
+
+## 2026-03-15 40:00 (EET) - US-018
+- What was implemented: Server-to-client PubSub — `session.publish(topic, args, kwargs, publisher)` sends EVENT to client if subscribed (no-op otherwise); publication IDs are per-session incrementing counters; `hub.publish_to_all(topic, args, kwargs, publisher)` broadcasts to all subscribed sessions; publisher_identification via optional `publisher` parameter in details
+- Files changed:
+  - src/fastapi_headless_wamp/session.py (added `_publication_id_counter`, `_next_publication_id()`, `publish()` async method with EVENT message construction, publisher_identification support)
+  - src/fastapi_headless_wamp/hub.py (added `publish_to_all()` async method that iterates all sessions and calls `session.publish()` with per-session error handling)
+  - tests/test_pubsub_publish.py (new: 18 tests covering session.publish with args/kwargs/no-args, unsubscribed no-op, incrementing publication IDs, publisher_identification, multiple topics, hub.publish_to_all with multiple sessions/skipping unsubscribed/kwargs/publisher/no sessions/no subscribers, FastAPI integration for publish/publish_to_all/unsubscribed no-op)
+  - .ralph/prd.json (US-018 passes: true)
+  - .ralph/progress.txt (appended progress, updated Codebase Patterns)
+- **Learnings for future iterations:**
+  - `session.publish()` is purely outbound (server→client), so no dispatch loop changes needed — no need to update `test_unhandled_message_type_logged_not_crashed`
+  - Publication IDs are per-session (`_publication_id_counter`), not hub-global — each session has its own incrementing counter
+  - `publish_to_all()` wraps each `session.publish()` in try/except to prevent one disconnected session from stopping broadcasts to others
+  - For tests with long-lived sessions, use `asyncio.Event` pairs (ready + keep_alive) with hooked message loops to keep sessions open for publish testing, then signal cleanup via `keep_alive.set()`
+  - No changes to `__init__.py` were needed since `publish()` and `publish_to_all()` are methods on existing exported classes, not new standalone exports
 ---

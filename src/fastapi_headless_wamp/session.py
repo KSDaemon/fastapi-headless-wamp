@@ -200,6 +200,9 @@ class WampSession:
         # Counter for server-initiated request IDs (separate from client IDs)
         self._request_id_counter: int = 0
 
+        # Counter for publication IDs (unique and incrementing per session)
+        self._publication_id_counter: int = 0
+
     @property
     def websocket(self) -> WebSocket:
         """The underlying WebSocket connection."""
@@ -514,6 +517,69 @@ class WampSession:
             self.session_id,
             request_id,
             mode,
+        )
+
+    # ------------------------------------------------------------------
+    # PubSub: server publishes events to client
+    # ------------------------------------------------------------------
+
+    def _next_publication_id(self) -> int:
+        """Generate the next unique publication ID for this session."""
+        self._publication_id_counter += 1
+        return self._publication_id_counter
+
+    async def publish(
+        self,
+        topic: str,
+        args: list[Any] | None = None,
+        kwargs: dict[str, Any] | None = None,
+        publisher: int | None = None,
+    ) -> None:
+        """Publish an event to this client session if it is subscribed to *topic*.
+
+        Sends an EVENT message to the client for the given topic.  If the
+        client has not subscribed to *topic*, the publish is silently
+        ignored (no error).
+
+        Args:
+            topic: The topic URI to publish to.
+            args: Positional arguments for the event payload.
+            kwargs: Keyword arguments for the event payload.
+            publisher: Optional publisher session ID to include in the
+                event details (publisher_identification feature).
+
+        EVENT format:
+            [EVENT, subscription_id, publication_id, details, args?, kwargs?]
+        """
+        subscription_id = self.subscription_uris.get(topic)
+        if subscription_id is None:
+            # Client not subscribed to this topic — no-op
+            return
+
+        publication_id = self._next_publication_id()
+
+        details: dict[str, Any] = {}
+        if publisher is not None:
+            details["publisher"] = publisher
+
+        event_msg: list[Any] = [
+            WampMessageType.EVENT,
+            subscription_id,
+            publication_id,
+            details,
+        ]
+        if kwargs:
+            event_msg.append(args or [])
+            event_msg.append(kwargs)
+        elif args:
+            event_msg.append(args)
+
+        await self.send_message(event_msg)
+        logger.debug(
+            "Session %d: published event on '%s' (publication_id=%d)",
+            self.session_id,
+            topic,
+            publication_id,
         )
 
     def get_progress_callback(self, request_id: int) -> ProgressCallback | None:

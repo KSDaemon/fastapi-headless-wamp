@@ -914,6 +914,43 @@ class WampHub:
         )
 
     # ------------------------------------------------------------------
+    # PubSub: server publishes events to clients
+    # ------------------------------------------------------------------
+
+    async def publish_to_all(
+        self,
+        topic: str,
+        args: list[Any] | None = None,
+        kwargs: dict[str, Any] | None = None,
+        publisher: int | None = None,
+    ) -> None:
+        """Publish an event to all sessions where the client has subscribed to *topic*.
+
+        This is a convenience method that iterates over all active sessions
+        and calls :meth:`WampSession.publish` on each one.  Sessions that
+        have not subscribed to *topic* are silently skipped.
+
+        Args:
+            topic: The topic URI to publish to.
+            args: Positional arguments for the event payload.
+            kwargs: Keyword arguments for the event payload.
+            publisher: Optional publisher session ID to include in the
+                event details (publisher_identification feature).
+        """
+        for session in list(self._sessions.values()):
+            try:
+                await session.publish(
+                    topic, args=args, kwargs=kwargs, publisher=publisher
+                )
+            except Exception as exc:
+                logger.error(
+                    "Hub: failed to publish to session %d: %s",
+                    session.session_id,
+                    exc,
+                    exc_info=True,
+                )
+
+    # ------------------------------------------------------------------
     # YIELD handling (client responds to server's INVOCATION)
     # ------------------------------------------------------------------
 
