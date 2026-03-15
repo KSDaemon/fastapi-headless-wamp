@@ -9,6 +9,9 @@ Started: воскресенье, 15 марта 2026 г. 21:55:12 (EET)
 - Tests: `uv run pytest` with pytest-asyncio in auto mode
 - README.md is required by hatchling build (even if minimal)
 - pyright config is in pyproject.toml under `[tool.pyright]`
+- In pyright strict mode, use typed factory functions for dataclass default_factory (e.g., `def _dict_factory() -> dict[str, Any]: return {}`) instead of bare `dict`/`list`
+- Message dataclasses use deferred imports inside `to_list()` methods to avoid circular imports between types.py and protocol.py
+- `validate_message()` takes `Any` (not `list[Any]`) so the isinstance check is meaningful at runtime
 
 ## 2026-03-15 21:57 (EET) - US-001
 - What was implemented: Full project scaffolding with pyproject.toml, source layout, all module stubs, LICENSE, NOTICE, .gitignore, and package exports
@@ -35,4 +38,18 @@ Started: воскресенье, 15 марта 2026 г. 21:55:12 (EET)
   - Serializer is defined as typing.Protocol with @runtime_checkable for isinstance checks
   - Error classes use class-level `uri` attribute for WAMP error URI mapping
   - service.py uses `func._rpc_uri` attribute injection for decorator metadata
+---
+
+## 2026-03-15 22:15 (EET) - US-002
+- What was implemented: WAMP protocol constants, message types, error URI constants, per-message-type validation functions, and message dataclasses
+- Files changed:
+  - src/fastapi_headless_wamp/protocol.py (WampMessageType IntEnum, 9 error URI constants, 22 validate_* functions, validate_message dispatcher)
+  - src/fastapi_headless_wamp/types.py (22 message dataclasses with to_list() methods, typed default factories)
+  - tests/test_protocol.py (106 tests: enum codes, error URIs, valid/invalid message validation, dispatch, dataclass round-trips)
+  - .ralph/prd.json (US-002 passes: true)
+- **Learnings for future iterations:**
+  - pyright strict mode rejects `field(default_factory=dict)` as `dict[Unknown, Unknown]`; use typed factory helpers like `_dict_factory() -> dict[str, Any]`
+  - `validate_message()` must accept `Any` not `list[Any]` so the isinstance guard is useful for runtime
+  - Deferred imports in dataclass `to_list()` methods cleanly avoid circular deps between types.py and protocol.py
+  - When writing test imports, double-check every name is actually in the import block — easy to miss one in a long list
 ---
