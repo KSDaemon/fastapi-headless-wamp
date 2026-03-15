@@ -21,6 +21,9 @@ Started: воскресенье, 15 марта 2026 г. 21:55:12 (EET)
 - GOODBYE handling: `session.handle_goodbye(msg)` sends GOODBYE reply with `wamp.error.goodbye_and_out`
 - Hub tracks sessions in `_sessions: dict[int, WampSession]`; session added after WELCOME, removed in finally block
 - `generate_session_id(existing_ids)` retries to ensure uniqueness among active sessions
+- Lifecycle callbacks: `@hub.on_session_open` / `@hub.on_session_close` are decorators on WampHub that register async callbacks; they fire in order and catch exceptions to avoid crashing the hub
+- For FastAPI integration tests, the `@app.websocket` handler parameter must be typed as `fastapi.WebSocket` (not `Any`), otherwise FastAPI's DI validation rejects the connection
+- `SessionCallback = Callable[[WampSession], Awaitable[None]]` is the type alias for lifecycle callbacks in hub.py
 
 ## 2026-03-15 21:57 (EET) - US-001
 - What was implemented: Full project scaffolding with pyproject.toml, source layout, all module stubs, LICENSE, NOTICE, .gitignore, and package exports
@@ -118,4 +121,18 @@ Started: воскресенье, 15 марта 2026 г. 21:55:12 (EET)
   - For hub integration tests with concurrent session tracking, use `asyncio.Event` pairs to pause the message loop and inspect hub state mid-connection
   - `handle_websocket()` accepts the WebSocket, negotiates subprotocol, calls `websocket.accept(subprotocol=...)`, then orchestrates the full lifecycle
   - The `scope["subprotocols"]` access on mock requires `scope: dict[str, Any]` with the subprotocols list
+---
+
+## 2026-03-15 24:30 (EET) - US-007
+- What was implemented: Lifecycle callbacks (`@wamp.on_session_open`, `@wamp.on_session_close`) on WampHub, firing at the correct points in the session lifecycle; comprehensive test suite with FastAPI test client integration
+- Files changed:
+  - src/fastapi_headless_wamp/hub.py (added `SessionCallback` type alias, `_session_callback_list()` factory, `on_session_open()` and `on_session_close()` decorator methods, `_fire_session_open()` and `_fire_session_close()` internal methods, integrated callbacks into `handle_websocket()`)
+  - tests/test_hub.py (new: 20 tests covering hub properties, session tracking add/remove, lifecycle callbacks firing/order/errors/disconnect, message dispatch routing, FastAPI integration with real WebSocket test client)
+  - .ralph/prd.json (US-007 passes: true)
+- **Learnings for future iterations:**
+  - Most of US-007's acceptance criteria (WampHub class, sessions dict, session_count, handle_websocket, message dispatch loop) were already implemented in US-006; only lifecycle callbacks and FastAPI integration tests were missing
+  - FastAPI `@app.websocket` handler parameter MUST be typed as `fastapi.WebSocket`, not `Any` — otherwise FastAPI's dependency injection validation rejects the WebSocket connection with a cryptic "Field required" error
+  - Lifecycle callback decorators on WampHub are simple: append to a list, return the function unchanged. Each callback is wrapped in try/except so one failing callback doesn't prevent others from running
+  - `on_session_close` fires BEFORE `session.cleanup()` so the callback can still inspect session state (e.g., session is still in `hub.sessions` during the callback)
+  - `starlette.testclient.TestClient` with `websocket_connect()` works synchronously but runs the async FastAPI handler in a thread — good enough for integration testing
 ---
