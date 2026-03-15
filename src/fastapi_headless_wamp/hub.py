@@ -17,6 +17,8 @@ from fastapi_headless_wamp.protocol import (
     WAMP_ERROR_RUNTIME_ERROR,
     WampMessageType,
     validate_call,
+    validate_register,
+    validate_unregister,
 )
 from fastapi_headless_wamp.service import WampService
 from fastapi_headless_wamp.session import RpcHandler, WampSession, negotiate_subprotocol
@@ -48,6 +50,8 @@ class WampHub:
         self._on_session_close_callbacks: list[SessionCallback] = (
             _session_callback_list()
         )
+        # Counter for generating unique registration IDs
+        self._next_registration_id: int = 0
 
     @property
     def sessions(self) -> dict[int, WampSession]:
@@ -322,6 +326,103 @@ class WampHub:
         await session.send_message(result_msg)
 
     # ------------------------------------------------------------------
+    # Client REGISTER / UNREGISTER handling (client-side RPCs)
+    # ------------------------------------------------------------------
+
+    def _generate_registration_id(self) -> int:
+        """Generate a unique registration ID for a client RPC registration."""
+        self._next_registration_id += 1
+        return self._next_registration_id
+
+    async def _handle_register(self, session: WampSession, msg: list[Any]) -> None:
+        """Handle a REGISTER message from the client.
+
+        Stores the procedure URI in the session's ``client_rpcs`` map with
+        a unique registration ID and sends REGISTERED back.
+
+        Multiple clients can register the same URI independently
+        (each in their own session, no conflict).
+        """
+        try:
+            validate_register(msg)
+        except WampError as exc:
+            logger.warning(
+                "Session %d: invalid REGISTER message: %s", session.session_id, exc
+            )
+            return
+
+        request_id: int = msg[1]
+        # options: dict[str, Any] = msg[2]  # reserved for future use
+        procedure: str = msg[3]
+
+        registration_id = self._generate_registration_id()
+
+        # Store in session's client_rpcs maps (per-session, isolated)
+        session.client_rpcs[registration_id] = procedure
+        session.client_rpc_uris[procedure] = registration_id
+
+        # Send REGISTERED
+        registered_msg: list[Any] = [
+            WampMessageType.REGISTERED,
+            request_id,
+            registration_id,
+        ]
+        await session.send_message(registered_msg)
+        logger.info(
+            "Session %d: registered client RPC '%s' (registration_id=%d)",
+            session.session_id,
+            procedure,
+            registration_id,
+        )
+
+    async def _handle_unregister(self, session: WampSession, msg: list[Any]) -> None:
+        """Handle an UNREGISTER message from the client.
+
+        Removes the procedure from the session's ``client_rpcs`` map
+        and sends UNREGISTERED back.
+        """
+        try:
+            validate_unregister(msg)
+        except WampError as exc:
+            logger.warning(
+                "Session %d: invalid UNREGISTER message: %s", session.session_id, exc
+            )
+            return
+
+        request_id: int = msg[1]
+        registration_id: int = msg[2]
+
+        # Look up registration
+        procedure = session.client_rpcs.get(registration_id)
+        if procedure is None:
+            error_msg: list[Any] = [
+                WampMessageType.ERROR,
+                WampMessageType.UNREGISTER,
+                request_id,
+                {},
+                WAMP_ERROR_NO_SUCH_PROCEDURE,
+            ]
+            await session.send_message(error_msg)
+            return
+
+        # Remove from session's maps
+        del session.client_rpcs[registration_id]
+        session.client_rpc_uris.pop(procedure, None)
+
+        # Send UNREGISTERED
+        unregistered_msg: list[Any] = [
+            WampMessageType.UNREGISTERED,
+            request_id,
+        ]
+        await session.send_message(unregistered_msg)
+        logger.info(
+            "Session %d: unregistered client RPC '%s' (registration_id=%d)",
+            session.session_id,
+            procedure,
+            registration_id,
+        )
+
+    # ------------------------------------------------------------------
     # WebSocket handler
     # ------------------------------------------------------------------
 
@@ -413,8 +514,12 @@ class WampHub:
                 break
             elif msg_type == WampMessageType.CALL:
                 await self._handle_call(session, msg)
+            elif msg_type == WampMessageType.REGISTER:
+                await self._handle_register(session, msg)
+            elif msg_type == WampMessageType.UNREGISTER:
+                await self._handle_unregister(session, msg)
             else:
-                # Future stories will add handlers for REGISTER, SUBSCRIBE, etc.
+                # Future stories will add handlers for SUBSCRIBE, PUBLISH, etc.
                 logger.debug(
                     "Session %d: unhandled message type %s",
                     session.session_id,
