@@ -205,6 +205,15 @@ class WampHub:
 
         Looks up the procedure URI in the hub's server RPC registry,
         invokes the handler, and sends RESULT or ERROR back.
+
+        Supports progressive call results: when the client sends
+        ``receive_progress: true`` in the CALL options, the handler
+        receives a ``_progress`` callback parameter that can be awaited
+        to send intermediate RESULT messages with ``progress: true``
+        in the details dict.  The handler's final return value is sent
+        as the last RESULT (without the progress flag).
+
+        When ``receive_progress`` is not set, ``_progress`` is ``None``.
         """
         try:
             validate_call(msg)
@@ -237,6 +246,32 @@ class WampHub:
         caller_kwargs = dict(call_kwargs)
         if options.get("disclose_me"):
             caller_kwargs["_caller_session_id"] = session.session_id
+
+        # Progressive call results support
+        receive_progress = bool(options.get("receive_progress"))
+
+        # Check if handler accepts _progress or **kwargs
+        sig = inspect.signature(handler)
+        handler_accepts_progress = "_progress" in sig.parameters or any(
+            p.kind == inspect.Parameter.VAR_KEYWORD for p in sig.parameters.values()
+        )
+
+        if receive_progress and handler_accepts_progress:
+            # Build a _progress callback that sends progressive RESULTs
+            async def _progress_callback(data: Any) -> None:
+                progress_msg: list[Any] = [
+                    WampMessageType.RESULT,
+                    request_id,
+                    {"progress": True},
+                ]
+                if data is not None:
+                    progress_msg.append([data])
+                await session.send_message(progress_msg)
+
+            caller_kwargs["_progress"] = _progress_callback
+        elif handler_accepts_progress:
+            # Handler accepts _progress but client didn't request progressive
+            caller_kwargs["_progress"] = None
 
         # Determine timeout from options (milliseconds -> seconds)
         timeout_ms = options.get("timeout")
@@ -317,7 +352,7 @@ class WampHub:
             await session.send_message(error_msg)
             return
 
-        # Build RESULT message
+        # Build final RESULT message (no progress flag)
         result_msg: list[Any] = [
             WampMessageType.RESULT,
             request_id,

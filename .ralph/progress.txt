@@ -36,6 +36,8 @@ Started: воскресенье, 15 марта 2026 г. 21:55:12 (EET)
 - `session.call(uri)` looks up URI in `client_rpc_uris`, sends INVOCATION, and awaits via `pending_calls` Future; hub handles YIELD→resolve and ERROR(INVOCATION)→reject
 - Hub message dispatch handles YIELD and ERROR(request_type=INVOCATION) by routing to `_handle_yield` and `_handle_invocation_error` respectively
 - `resolve_pending_call()` / `reject_pending_call()` on WampSession are the public entry points for resolving/rejecting pending call futures from the hub
+- Progressive call results: when `receive_progress: true` in CALL options, `_handle_call()` injects `_progress` async callback into handler kwargs (only if handler signature accepts it); the callback sends RESULT with `{"progress": True}` in details. Non-progressive calls pass `_progress=None`
+- Before injecting special kwargs (`_progress`, `_caller_session_id`), check `inspect.signature(handler)` to see if the handler actually accepts them or has `**kwargs`
 
 ## 2026-03-15 21:57 (EET) - US-001
 - What was implemented: Full project scaffolding with pyproject.toml, source layout, all module stubs, LICENSE, NOTICE, .gitignore, and package exports
@@ -211,4 +213,18 @@ Started: воскресенье, 15 марта 2026 г. 21:55:12 (EET)
   - `timeout` parameter uses `asyncio.wait_for()` and catches `asyncio.TimeoutError` → raises `WampCallTimeout`
   - FastAPI TestClient integration tests with `on_session_open` + `asyncio.create_task(do_call())` work but need polling for the client to register before calling
   - No need to update `test_unhandled_message_type_logged_not_crashed` this time since SUBSCRIBE is still unhandled
+---
+
+## 2026-03-15 30:00 (EET) - US-012
+- What was implemented: Progressive call results — when client sends CALL with `receive_progress: true`, the server RPC handler receives an async `_progress` callback that sends intermediate RESULT messages with `details.progress = true`. Final return sends RESULT without progress flag. Non-progressive calls pass `_progress=None` to handlers that accept it.
+- Files changed:
+  - src/fastapi_headless_wamp/hub.py (modified `_handle_call()` to inspect handler signature and inject `_progress` callback or `None` based on `receive_progress` option and handler signature acceptance)
+  - tests/test_progressive.py (new: 10 tests covering progressive results with multiple chunks, single progress, None data, request ID tracking, _progress=None for non-progressive calls, receive_progress=false, handler without _progress param still works, complex data types)
+  - .ralph/prd.json (US-012 passes: true)
+- **Learnings for future iterations:**
+  - Before injecting `_progress` into kwargs, must check `inspect.signature(handler)` to verify the handler actually accepts `_progress` or has `**kwargs`; otherwise the handler call will fail with `TypeError: unexpected keyword argument`
+  - The `_progress_callback` closure captures `request_id` and `session` from the outer scope — this is safe because the callback is only used within the lifetime of the single CALL handling
+  - Progressive RESULT uses `{"progress": True}` in the details dict (position [2] of the RESULT message); the final RESULT uses `{}` (empty details)
+  - `inspect.Parameter.VAR_KEYWORD` check handles handlers with `**kwargs` that would accept any keyword argument
+  - No dispatch loop changes needed since CALL was already handled; this was purely a modification to `_handle_call()` logic
 ---
