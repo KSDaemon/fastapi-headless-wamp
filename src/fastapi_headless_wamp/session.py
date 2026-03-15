@@ -5,6 +5,7 @@ from __future__ import annotations
 import asyncio
 import logging
 import random
+from collections.abc import Awaitable
 from typing import Any, AsyncIterator, Callable
 
 from starlette.websockets import WebSocket, WebSocketDisconnect
@@ -31,6 +32,7 @@ logger = logging.getLogger(__name__)
 
 # Type aliases for internal maps
 RpcHandler = Callable[..., Any]
+ProgressCallback = Callable[[Any], Awaitable[None]]
 
 # WAMP role features advertised by the server
 DEALER_FEATURES: dict[str, bool] = {
@@ -65,6 +67,10 @@ def _int_future_dict() -> dict[int, asyncio.Future[Any]]:
 
 
 def _int_sub_dict() -> dict[int, str]:
+    return {}
+
+
+def _int_progress_dict() -> dict[int, ProgressCallback]:
     return {}
 
 
@@ -124,6 +130,11 @@ class WampSession:
 
         # Pending calls TO client: request_id -> Future
         self.pending_calls: dict[int, asyncio.Future[Any]] = _int_future_dict()
+
+        # Progress callbacks for pending calls: request_id -> on_progress callback
+        self._pending_progress_callbacks: dict[int, ProgressCallback] = (
+            _int_progress_dict()
+        )
 
         # Counter for server-initiated request IDs (separate from client IDs)
         self._request_id_counter: int = 0
@@ -302,6 +313,8 @@ class WampSession:
         args: list[Any] | None = None,
         kwargs: dict[str, Any] | None = None,
         timeout: float | None = None,
+        receive_progress: bool = False,
+        on_progress: ProgressCallback | None = None,
     ) -> Any:
         """Call a client-registered RPC by URI.
 
@@ -314,9 +327,17 @@ class WampSession:
             kwargs: Keyword arguments for the invocation.
             timeout: Optional timeout in seconds. If the client does not
                 respond within this duration, :exc:`WampCallTimeout` is raised.
+            receive_progress: If ``True``, the INVOCATION is sent with
+                ``details.receive_progress = true``, signalling the client
+                that it may send progressive YIELD messages.
+            on_progress: Optional async callback invoked for each progressive
+                YIELD received from the client.  The callback receives the
+                intermediate result value.  If ``receive_progress`` is ``True``
+                but *on_progress* is not provided, progressive YIELDs are
+                silently consumed.
 
         Returns:
-            The result value from the client's YIELD response.
+            The result value from the client's final YIELD response.
 
         Raises:
             WampNoSuchProcedure: If the URI is not registered on this session.
@@ -337,12 +358,20 @@ class WampSession:
         future: asyncio.Future[Any] = loop.create_future()
         self.pending_calls[request_id] = future
 
+        # Store progress callback if provided
+        if receive_progress and on_progress is not None:
+            self._pending_progress_callbacks[request_id] = on_progress
+
         # Build INVOCATION message
+        details: dict[str, Any] = {}
+        if receive_progress:
+            details["receive_progress"] = True
+
         invocation_msg: list[Any] = [
             WampMessageType.INVOCATION,
             request_id,
             registration_id,
-            {},  # details
+            details,
         ]
         if kwargs:
             invocation_msg.append(args or [])
@@ -352,10 +381,11 @@ class WampSession:
 
         await self.send_message(invocation_msg)
         logger.debug(
-            "Session %d: sent INVOCATION for '%s' (request_id=%d)",
+            "Session %d: sent INVOCATION for '%s' (request_id=%d, progressive=%s)",
             self.session_id,
             uri,
             request_id,
+            receive_progress,
         )
 
         # Await the response with optional timeout
@@ -367,6 +397,7 @@ class WampSession:
         except asyncio.TimeoutError:
             # Clean up the pending call
             self.pending_calls.pop(request_id, None)
+            self._pending_progress_callbacks.pop(request_id, None)
             raise WampCallTimeout(
                 f"Call to '{uri}' on session {self.session_id} timed out "
                 f"after {timeout}s"
@@ -374,8 +405,13 @@ class WampSession:
         finally:
             # Always clean up if still present
             self.pending_calls.pop(request_id, None)
+            self._pending_progress_callbacks.pop(request_id, None)
 
         return result
+
+    def get_progress_callback(self, request_id: int) -> ProgressCallback | None:
+        """Return the on_progress callback for *request_id*, if any."""
+        return self._pending_progress_callbacks.get(request_id)
 
     def resolve_pending_call(self, request_id: int, result: Any) -> None:
         """Resolve a pending call future with a successful result.
@@ -466,5 +502,6 @@ class WampSession:
         self.subscription_uris.clear()
         self.server_subscriptions.clear()
         self.pending_calls.clear()
+        self._pending_progress_callbacks.clear()
 
         logger.debug("Session %d: cleanup complete", self.session_id)

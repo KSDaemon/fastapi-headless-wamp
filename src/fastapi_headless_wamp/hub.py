@@ -466,7 +466,14 @@ class WampHub:
     async def _handle_yield(self, session: WampSession, msg: list[Any]) -> None:
         """Handle a YIELD message from the client.
 
-        Resolves the pending call Future for the corresponding INVOCATION.
+        Resolves the pending call Future for the corresponding INVOCATION,
+        or invokes the progress callback for progressive YIELDs.
+
+        Progressive YIELD: when ``options.progress`` is ``true``, the YIELD
+        carries an intermediate result.  The hub looks up the progress
+        callback stored by :meth:`WampSession.call` and invokes it.  The
+        pending call future is **not** resolved until the final YIELD
+        (without the progress flag) arrives.
 
         YIELD format: [YIELD, INVOCATION.Request|id, Options|dict, Arguments|list?, ArgumentsKw|dict?]
         """
@@ -479,7 +486,7 @@ class WampHub:
             return
 
         request_id: int = msg[1]
-        # options: dict[str, Any] = msg[2]  # reserved for future use (progressive)
+        options: dict[str, Any] = msg[2] if len(msg) > 2 else {}
         yield_args: list[Any] = msg[3] if len(msg) > 3 else []
         # yield_kwargs: dict[str, Any] = msg[4] if len(msg) > 4 else {}
 
@@ -491,7 +498,32 @@ class WampHub:
         else:
             result = None
 
-        session.resolve_pending_call(request_id, result)
+        is_progressive = bool(options.get("progress"))
+
+        if is_progressive:
+            # Progressive YIELD: invoke on_progress callback if registered
+            on_progress = session.get_progress_callback(request_id)
+            if on_progress is not None:
+                try:
+                    await on_progress(result)
+                except Exception as exc:
+                    logger.error(
+                        "Session %d: on_progress callback error for request %d: %s",
+                        session.session_id,
+                        request_id,
+                        exc,
+                        exc_info=True,
+                    )
+            else:
+                # receive_progress=True but no callback: silently consume
+                logger.debug(
+                    "Session %d: progressive YIELD for request %d (no callback)",
+                    session.session_id,
+                    request_id,
+                )
+        else:
+            # Final YIELD: resolve the pending call future
+            session.resolve_pending_call(request_id, result)
 
     async def _handle_invocation_error(
         self, session: WampSession, msg: list[Any]

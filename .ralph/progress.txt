@@ -38,6 +38,8 @@ Started: воскресенье, 15 марта 2026 г. 21:55:12 (EET)
 - `resolve_pending_call()` / `reject_pending_call()` on WampSession are the public entry points for resolving/rejecting pending call futures from the hub
 - Progressive call results: when `receive_progress: true` in CALL options, `_handle_call()` injects `_progress` async callback into handler kwargs (only if handler signature accepts it); the callback sends RESULT with `{"progress": True}` in details. Non-progressive calls pass `_progress=None`
 - Before injecting special kwargs (`_progress`, `_caller_session_id`), check `inspect.signature(handler)` to see if the handler actually accepts them or has `**kwargs`
+- For server-to-client progressive calls: `session.call(receive_progress=True, on_progress=cb)` stores callback in `_pending_progress_callbacks`; hub's `_handle_yield()` checks `options.progress` to route to callback vs resolve future
+- When accessing private WampSession state from hub, add a public method (e.g., `get_progress_callback()`) instead of directly accessing `_pending_*` attributes — pyright strict mode flags protected member access across classes
 
 ## 2026-03-15 21:57 (EET) - US-001
 - What was implemented: Full project scaffolding with pyproject.toml, source layout, all module stubs, LICENSE, NOTICE, .gitignore, and package exports
@@ -227,4 +229,19 @@ Started: воскресенье, 15 марта 2026 г. 21:55:12 (EET)
   - Progressive RESULT uses `{"progress": True}` in the details dict (position [2] of the RESULT message); the final RESULT uses `{}` (empty details)
   - `inspect.Parameter.VAR_KEYWORD` check handles handlers with `**kwargs` that would accept any keyword argument
   - No dispatch loop changes needed since CALL was already handled; this was purely a modification to `_handle_call()` logic
+---
+
+## 2026-03-15 31:30 (EET) - US-013
+- What was implemented: Progressive call results for server-to-client calls — `session.call()` now accepts `receive_progress` and `on_progress` parameters; INVOCATION sent with `details.receive_progress = true`; hub's `_handle_yield()` detects progressive YIELD (options.progress = true) and invokes the on_progress callback; final YIELD resolves the call future; silently consumes progressive yields when no callback provided
+- Files changed:
+  - src/fastapi_headless_wamp/session.py (added `ProgressCallback` type alias, `_pending_progress_callbacks` dict, `get_progress_callback()` public method, `receive_progress` and `on_progress` params to `call()`, cleanup of progress callbacks in `call()` finally block and `cleanup()` method)
+  - src/fastapi_headless_wamp/hub.py (modified `_handle_yield()` to check `options.progress`, invoke progress callback for progressive YIELDs, resolve future only for final YIELDs)
+  - tests/test_progressive_reverse.py (new: 11 tests covering progressive yields with callback, single progress, None data, final yield resolves, receive_progress in INVOCATION details, non-progressive call, no callback silently consumed, cleanup after completion, cleanup on timeout, dispatch loop integration, FastAPI integration)
+  - .ralph/prd.json (US-013 passes: true)
+- **Learnings for future iterations:**
+  - `_pending_progress_callbacks` is a private dict on WampSession; use `get_progress_callback(request_id)` public method from hub to avoid pyright "protected member" errors
+  - Progressive YIELD has `options.progress = true`; final YIELD has `options.progress` absent or `false` — use `bool(options.get("progress"))` to check
+  - Progress callbacks are cleaned up in the `finally` block of `session.call()` along with `pending_calls`, and also in `session.cleanup()` for disconnect scenarios
+  - The `_handle_yield()` in hub.py needed no dispatch loop changes — YIELD was already routed there; the change was purely inside `_handle_yield()` to distinguish progressive vs final
+  - `ProgressCallback = Callable[[Any], Awaitable[None]]` type alias defined in session.py alongside `RpcHandler`
 ---
