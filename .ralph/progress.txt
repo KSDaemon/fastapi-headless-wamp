@@ -1,0 +1,38 @@
+# Ralphy Progress Log
+Started: воскресенье, 15 марта 2026 г. 21:55:12 (EET)
+---
+
+## Codebase Patterns
+- Package manager is `uv`; use `uv run` to execute commands in the venv
+- Source layout: `src/fastapi_headless_wamp/` with hatchling build backend
+- Typecheck: `uv run pyright src/` (strict mode, Python 3.12 target)
+- Tests: `uv run pytest` with pytest-asyncio in auto mode
+- README.md is required by hatchling build (even if minimal)
+- pyright config is in pyproject.toml under `[tool.pyright]`
+
+## 2026-03-15 21:57 (EET) - US-001
+- What was implemented: Full project scaffolding with pyproject.toml, source layout, all module stubs, LICENSE, NOTICE, .gitignore, and package exports
+- Files changed:
+  - pyproject.toml (package config, deps, dev deps, pyright, pytest)
+  - .python-version (3.14)
+  - .gitignore (Python-specific)
+  - LICENSE (Apache 2.0 full text)
+  - NOTICE (attribution)
+  - README.md (minimal placeholder)
+  - src/fastapi_headless_wamp/__init__.py (exports + NullHandler logging)
+  - src/fastapi_headless_wamp/hub.py (WampHub stub)
+  - src/fastapi_headless_wamp/session.py (WampSession stub)
+  - src/fastapi_headless_wamp/protocol.py (empty stub)
+  - src/fastapi_headless_wamp/serializers.py (Serializer protocol + JsonSerializer)
+  - src/fastapi_headless_wamp/service.py (WampService + rpc/subscribe decorators)
+  - src/fastapi_headless_wamp/types.py (type aliases)
+  - src/fastapi_headless_wamp/errors.py (full error hierarchy)
+  - tests/__init__.py (empty)
+  - uv.lock (generated)
+- **Learnings for future iterations:**
+  - hatchling requires README.md to exist even if minimal
+  - pyright strict mode passes on the stub files as-is
+  - Serializer is defined as typing.Protocol with @runtime_checkable for isinstance checks
+  - Error classes use class-level `uri` attribute for WAMP error URI mapping
+  - service.py uses `func._rpc_uri` attribute injection for decorator metadata
+---

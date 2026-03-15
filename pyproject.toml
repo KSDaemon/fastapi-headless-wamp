@@ -1,0 +1,57 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "fastapi-headless-wamp"
+version = "0.1.0"
+description = "Bidirectional WAMP RPC and PubSub for FastAPI without a separate router"
+readme = "README.md"
+license = "Apache-2.0"
+requires-python = ">=3.12"
+authors = [
+    { name = "fastapi-headless-wamp contributors" },
+]
+keywords = ["fastapi", "wamp", "websocket", "rpc", "pubsub"]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Framework :: FastAPI",
+    "Intended Audience :: Developers",
+    "License :: OSI Approved :: Apache Software License",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Programming Language :: Python :: 3.14",
+    "Topic :: Internet :: WWW/HTTP",
+    "Typing :: Typed",
+]
+dependencies = [
+    "fastapi>=0.100.0",
+    "starlette>=0.27.0",
+]
+
+[project.urls]
+Homepage = "https://github.com/example/fastapi-headless-wamp"
+Repository = "https://github.com/example/fastapi-headless-wamp"
+
+[dependency-groups]
+dev = [
+    "pytest>=8.0",
+    "pytest-asyncio>=0.24",
+    "httpx>=0.27",
+    "uvicorn>=0.30",
+    "pyright>=1.1",
+]
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/fastapi_headless_wamp"]
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
+testpaths = ["tests"]
+
+[tool.pyright]
+pythonVersion = "3.12"
+typeCheckingMode = "strict"
+include = ["src"]
+exclude = ["tests"]
