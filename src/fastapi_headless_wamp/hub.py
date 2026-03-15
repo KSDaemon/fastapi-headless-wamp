@@ -20,6 +20,7 @@ from fastapi_headless_wamp.protocol import (
     validate_call,
     validate_cancel,
     validate_error,
+    validate_publish,
     validate_register,
     validate_subscribe,
     validate_unregister,
@@ -56,6 +57,7 @@ class WampHub:
         self.realm = realm
         self._sessions: dict[int, WampSession] = {}
         self._server_rpcs: dict[str, RpcHandler] = _rpc_registry()
+        self._server_subscriptions: dict[str, list[RpcHandler]] = {}
         self._on_session_open_callbacks: list[SessionCallback] = (
             _session_callback_list()
         )
@@ -66,6 +68,8 @@ class WampHub:
         self._next_registration_id: int = 0
         # Counter for generating unique subscription IDs
         self._next_subscription_id: int = 0
+        # Counter for publication IDs (hub-level, for PUBLISHED acknowledgments)
+        self._next_hub_publication_id: int = 0
 
     @property
     def sessions(self) -> dict[int, WampSession]:
@@ -106,15 +110,47 @@ class WampHub:
         return decorator
 
     # ------------------------------------------------------------------
+    # Server-side subscription decorator
+    # ------------------------------------------------------------------
+
+    def subscribe(self, topic: str) -> Callable[..., Any]:
+        """Decorator to register a function as a server-side subscription handler.
+
+        When a WAMP client sends a PUBLISH message on *topic*, the decorated
+        handler is invoked with the event args/kwargs and the session.
+
+        Usage::
+
+            @wamp.subscribe("com.example.event")
+            async def on_event(*args: Any, _session: WampSession | None = None, **kwargs: Any) -> None:
+                print(f"Event received: {args}, {kwargs}")
+
+        Both ``async def`` and regular ``def`` functions are supported.
+        Sync functions are automatically run via :func:`asyncio.to_thread`.
+
+        Multiple handlers can be registered for the same topic.
+        """
+
+        def decorator(func: Callable[..., Any]) -> Callable[..., Any]:
+            if topic not in self._server_subscriptions:
+                self._server_subscriptions[topic] = []
+            self._server_subscriptions[topic].append(func)
+            logger.info("Registered server subscription handler: %s", topic)
+            return func
+
+        return decorator
+
+    # ------------------------------------------------------------------
     # Service registration
     # ------------------------------------------------------------------
 
     def register_service(self, service: WampService) -> None:
-        """Register all ``@rpc``-marked methods of a :class:`WampService`.
+        """Register all ``@rpc``- and ``@subscribe``-marked methods of a :class:`WampService`.
 
         Introspects the service instance for methods decorated with
-        :func:`rpc`, constructs the full URI from the service prefix and
-        the method's URI (or name), and registers them on the hub.
+        :func:`rpc` or :func:`subscribe`, constructs the full URI from
+        the service prefix and the method's URI (or name), and registers
+        them on the hub.
 
         The service's :attr:`~WampService.hub` attribute is set to this
         hub instance so that service methods can access it via
@@ -130,33 +166,52 @@ class WampHub:
             attr = getattr(service, attr_name)
             if not callable(attr):
                 continue
+
+            # --- Register @rpc-marked methods ---
             rpc_uri: str | None = getattr(attr, "_rpc_uri", None)
             # _rpc_uri is set by the @rpc() decorator.
             # It can be:
             #   - a string (explicit URI)
             #   - None (infer from method name)
             # If the attribute doesn't have _rpc_uri at all, skip it.
-            if not hasattr(attr, "_rpc_uri"):
-                continue
+            if hasattr(attr, "_rpc_uri"):
+                # Build full URI
+                if rpc_uri is not None:
+                    method_uri = rpc_uri
+                else:
+                    method_uri = attr_name
 
-            # Build full URI
-            if rpc_uri is not None:
-                method_uri = rpc_uri
-            else:
-                method_uri = attr_name
+                if prefix:
+                    full_uri = f"{prefix}.{method_uri}"
+                else:
+                    full_uri = method_uri
 
-            if prefix:
-                full_uri = f"{prefix}.{method_uri}"
-            else:
-                full_uri = method_uri
+                self._server_rpcs[full_uri] = attr
+                logger.info(
+                    "Registered service RPC: %s (from %s.%s)",
+                    full_uri,
+                    type(service).__name__,
+                    attr_name,
+                )
 
-            self._server_rpcs[full_uri] = attr
-            logger.info(
-                "Registered service RPC: %s (from %s.%s)",
-                full_uri,
-                type(service).__name__,
-                attr_name,
-            )
+            # --- Register @subscribe-marked methods ---
+            subscribe_topic: str | None = getattr(attr, "_subscribe_topic", None)
+            if subscribe_topic is not None:
+                # Build full topic URI with prefix
+                if prefix:
+                    full_topic = f"{prefix}.{subscribe_topic}"
+                else:
+                    full_topic = subscribe_topic
+
+                if full_topic not in self._server_subscriptions:
+                    self._server_subscriptions[full_topic] = []
+                self._server_subscriptions[full_topic].append(attr)
+                logger.info(
+                    "Registered service subscription: %s (from %s.%s)",
+                    full_topic,
+                    type(service).__name__,
+                    attr_name,
+                )
 
     # ------------------------------------------------------------------
     # Lifecycle callback decorators
@@ -914,6 +969,99 @@ class WampHub:
         )
 
     # ------------------------------------------------------------------
+    # PUBLISH handling (client publishes, server receives)
+    # ------------------------------------------------------------------
+
+    def _generate_hub_publication_id(self) -> int:
+        """Generate a unique hub-level publication ID for PUBLISHED acknowledgments."""
+        self._next_hub_publication_id += 1
+        return self._next_hub_publication_id
+
+    async def _handle_publish(self, session: WampSession, msg: list[Any]) -> None:
+        """Handle a PUBLISH message from the client.
+
+        When a client sends PUBLISH on a topic that has registered server-side
+        subscription handlers (via ``@wamp.subscribe(topic)`` or class-based
+        ``@subscribe(topic)``), the handlers are invoked with the event
+        args/kwargs and the session.
+
+        If ``options.acknowledge`` is ``true`` in the PUBLISH message, a
+        PUBLISHED message is sent back to the client.
+
+        PubSub options parsed (trivial in peer-to-peer but parsed correctly):
+
+        * **publisher_exclusion**: ``exclude_me`` option
+        * **subscriber_blackwhite_listing**: ``eligible`` / ``exclude`` options
+        """
+        try:
+            validate_publish(msg)
+        except WampError as exc:
+            logger.warning(
+                "Session %d: invalid PUBLISH message: %s", session.session_id, exc
+            )
+            return
+
+        request_id: int = msg[1]
+        options: dict[str, Any] = msg[2]
+        topic: str = msg[3]
+        pub_args: list[Any] = msg[4] if len(msg) > 4 else []
+        pub_kwargs: dict[str, Any] = msg[5] if len(msg) > 5 else {}
+
+        acknowledge = bool(options.get("acknowledge"))
+
+        # Parse options (trivial in peer-to-peer, but we parse them correctly)
+        _exclude_me = options.get("exclude_me", True)  # noqa: F841 — parsed for correctness
+        _eligible = options.get("eligible")  # noqa: F841 — parsed for correctness
+        _exclude = options.get("exclude")  # noqa: F841 — parsed for correctness
+
+        # Look up server-side subscription handlers for this topic
+        handlers = self._server_subscriptions.get(topic)
+
+        if handlers:
+            for handler in handlers:
+                try:
+                    # Build kwargs for the handler
+                    handler_kwargs = dict(pub_kwargs)
+
+                    # Check if handler accepts _session parameter
+                    sig = inspect.signature(handler)
+                    handler_accepts_session = "_session" in sig.parameters or any(
+                        p.kind == inspect.Parameter.VAR_KEYWORD
+                        for p in sig.parameters.values()
+                    )
+                    if handler_accepts_session:
+                        handler_kwargs["_session"] = session
+
+                    if inspect.iscoroutinefunction(handler):
+                        await handler(*pub_args, **handler_kwargs)
+                    else:
+                        await asyncio.to_thread(handler, *pub_args, **handler_kwargs)
+                except Exception as exc:
+                    logger.error(
+                        "Session %d: server subscription handler for '%s' raised: %s",
+                        session.session_id,
+                        topic,
+                        exc,
+                        exc_info=True,
+                    )
+
+        # Send PUBLISHED acknowledgment if requested
+        if acknowledge:
+            publication_id = self._generate_hub_publication_id()
+            published_msg: list[Any] = [
+                WampMessageType.PUBLISHED,
+                request_id,
+                publication_id,
+            ]
+            await session.send_message(published_msg)
+            logger.debug(
+                "Session %d: sent PUBLISHED for '%s' (publication_id=%d)",
+                session.session_id,
+                topic,
+                publication_id,
+            )
+
+    # ------------------------------------------------------------------
     # PubSub: server publishes events to clients
     # ------------------------------------------------------------------
 
@@ -1169,6 +1317,8 @@ class WampHub:
                 await self._handle_register(session, msg)
             elif msg_type == WampMessageType.UNREGISTER:
                 await self._handle_unregister(session, msg)
+            elif msg_type == WampMessageType.PUBLISH:
+                await self._handle_publish(session, msg)
             elif msg_type == WampMessageType.SUBSCRIBE:
                 await self._handle_subscribe(session, msg)
             elif msg_type == WampMessageType.UNSUBSCRIBE:
