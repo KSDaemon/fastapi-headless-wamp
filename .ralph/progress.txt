@@ -398,3 +398,20 @@ Started: воскресенье, 15 марта 2026 г. 21:55:12 (EET)
   - Disconnect without GOODBYE still triggers `on_session_close` callback and hub cleanup — the message loop catches the WebSocketDisconnect exception
   - No changes to source code were needed — all acceptance criteria were met by adding integration tests only
 ---
+
+## 2026-03-15 48:00 (EET) - US-022
+- What was implemented: Comprehensive README.md documentation and four runnable example files
+- Files changed:
+  - README.md (full rewrite: project description, features list, architecture diagram, installation, quick start with both API styles, bidirectional RPC, PubSub, progressive results, call cancellation, session lifecycle, custom serializers, wampy.js compatibility notes, API reference tables, error class reference)
+  - examples/basic_rpc.py (standalone decorator RPCs: async add, async greet, sync fibonacci, auto-mount via get_router)
+  - examples/class_service.py (class-based WampService: MathService with add/multiply/factorial, StringService with upper/reverse, register_service + get_router)
+  - examples/bidirectional.py (server calling client RPCs: server-side ping/time, on_session_open callback that calls client-registered RPCs with timeout, lifecycle callbacks)
+  - examples/pubsub.py (PubSub both directions: @wamp.subscribe for chat/telemetry, class-based NotificationService with @subscribe + @rpc, server publishing on session open with ticker task, publish_to_all on disconnect)
+  - .ralph/prd.json (US-022 passes: true)
+- **Learnings for future iterations:**
+  - Examples are excluded from pyright typecheck (config only includes `src/`), but `ast.parse()` + `import` checks confirm they are valid Python
+  - All examples use `app.include_router(wamp.get_router(path="/ws"))` as the canonical integration pattern
+  - Each example is self-contained and runnable with `uvicorn examples.<name>:app`
+  - README architecture diagram uses ASCII art for universal rendering (no Mermaid/external images)
+  - The `_session` parameter injection pattern for subscription handlers should be documented clearly since it's a non-obvious convention
+---
