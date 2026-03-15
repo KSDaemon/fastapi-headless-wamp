@@ -44,6 +44,10 @@ Started: воскресенье, 15 марта 2026 г. 21:55:12 (EET)
 - For progressive input handlers, only inject special kwargs (`_input_chunks`, `_progress`, `_caller_session_id`) — CALL data (args/kwargs) flows through the `_input_chunks` async iterator, not as handler keyword arguments
 - Use public constants (not leading-underscore) for sentinels shared across modules — pyright strict flags private names imported from other modules
 - When refactoring large methods, extract helper methods (`_invoke_rpc_handler`, `_run_progressive_input_handler`) and keep the original method as a dispatcher — this avoids duplication and keeps each method focused
+- CALL handlers now run in `asyncio.create_task()` to support CANCEL; this means RESULT/GOODBYE ordering is non-deterministic — tests should search for messages by type rather than assuming positional order
+- For CANCEL support: `_running_call_tasks` tracks handler tasks per-session; `_cancelled_request_ids` set suppresses duplicate ERROR/RESULT when CANCEL (skip/killnowait) already sent ERROR
+- `handle_websocket()` awaits running handler tasks (1s grace) before cleanup to allow fast handlers to complete before session teardown
+- Use public accessor methods (`get_all_running_call_tasks()`, `mark_request_cancelled()`, etc.) instead of accessing private WampSession attributes from hub — pyright strict mode flags cross-class private access
 
 ## 2026-03-15 21:57 (EET) - US-001
 - What was implemented: Full project scaffolding with pyproject.toml, source layout, all module stubs, LICENSE, NOTICE, .gitignore, and package exports
@@ -266,4 +270,21 @@ Started: воскресенье, 15 марта 2026 г. 21:55:12 (EET)
   - The `ProgressiveCallInput` class wraps an `asyncio.Queue` and uses a sentinel object (`PROGRESSIVE_INPUT_END`) to signal end of stream via `StopAsyncIteration`
   - Sentinel constants shared across modules must NOT have leading underscore — pyright strict flags private name imports
   - Python 3.14 no longer has `asyncio.get_event_loop()` without a running loop — use `async def` tests with pytest-asyncio auto mode instead
+---
+
+## 2026-03-15 35:00 (EET) - US-015
+- What was implemented: Call cancellation — client sends CANCEL for a pending CALL, server cancels the running handler asyncio task and sends ERROR with `wamp.error.canceled`. Three cancel modes supported: `kill` (default — cancel task, handler's CancelledError sends ERROR), `skip` (let handler continue, send ERROR immediately), `killnowait` (cancel task AND send ERROR immediately). CANCEL after handler completion is silently ignored.
+- Files changed:
+  - src/fastapi_headless_wamp/session.py (added `_running_call_tasks` dict and `_cancelled_request_ids` set for tracking; public methods `store_running_call_task()`, `get_running_call_task()`, `remove_running_call_task()`, `get_all_running_call_tasks()`, `mark_request_cancelled()`, `is_request_cancelled()`, `clear_cancelled_request()`; updated `cleanup()` to cancel running tasks)
+  - src/fastapi_headless_wamp/hub.py (added `_handle_cancel()` method with skip/kill/killnowait mode support; added CANCEL routing in `_message_loop()`; changed `_handle_call()` to wrap regular handler in `asyncio.create_task()` for cancellation support; added task-tracking done callbacks; updated `handle_websocket()` finally block to await running tasks before cleanup; updated `_invoke_rpc_handler()` to suppress duplicate ERROR/RESULT for cancelled requests; imported `validate_cancel`)
+  - tests/test_cancellation.py (new: 12 tests covering kill mode default + explicit, cancel after completion, cancel non-existent request, skip mode with handler still running, killnowait mode, no duplicate errors, FastAPI integration, sync handler cancellation, multiple calls with selective cancel, invalid CANCEL message, request_id matching)
+  - tests/test_rpc.py (updated `test_handle_call_async` to search for RESULT by type instead of assuming positional order, since task-based handlers may send RESULT after GOODBYE reply)
+  - .ralph/prd.json (US-015 passes: true)
+- **Learnings for future iterations:**
+  - Making handlers run as `asyncio.create_task()` is required for CANCEL to work (message loop must process CANCEL while handler is in-flight), but this changes message ordering — RESULT may arrive after GOODBYE reply
+  - For skip/killnowait modes, the CANCEL handler sends ERROR immediately and marks request_id as "cancelled" via `_cancelled_request_ids` set; the handler's error/result path checks this set and suppresses duplicate messages
+  - The `handle_websocket()` finally block must await running tasks (with a grace timeout) before cleanup, otherwise fast handlers may be cancelled before they can send their RESULT
+  - `task.add_done_callback()` is used to auto-clean `_running_call_tasks` when a handler task finishes, so CANCEL after completion finds no task and is silently ignored
+  - Tests for cancellation need `asyncio.Event` synchronization — handler sets event when started, test awaits it before sending CANCEL, to avoid race conditions
+  - Sync handlers via `asyncio.to_thread()` can't be truly interrupted by task.cancel() — use killnowait mode to at least send the ERROR immediately
 ---
