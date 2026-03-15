@@ -15,6 +15,12 @@ Started: воскресенье, 15 марта 2026 г. 21:55:12 (EET)
 - WampSession wraps starlette WebSocket + Serializer; uses text mode for JSON, binary mode for binary serializers
 - Tests use a `MockWebSocket` class with async queues for simulating send/receive without a real server
 - Per-session state maps (client_rpcs, subscriptions, pending_calls, etc.) are initialized in __init__ via typed factory functions
+- `negotiate_subprotocol()` is a standalone function in session.py that matches client subprotocols against the serializer registry
+- WampHub.handle_websocket() is the complete async handler: negotiate subprotocol → accept → handshake → message loop → cleanup
+- Session handshake: `session.perform_handshake(realm, existing_ids)` handles HELLO → WELCOME, ABORT on invalid first message, realm mismatch
+- GOODBYE handling: `session.handle_goodbye(msg)` sends GOODBYE reply with `wamp.error.goodbye_and_out`
+- Hub tracks sessions in `_sessions: dict[int, WampSession]`; session added after WELCOME, removed in finally block
+- `generate_session_id(existing_ids)` retries to ensure uniqueness among active sessions
 
 ## 2026-03-15 21:57 (EET) - US-001
 - What was implemented: Full project scaffolding with pyproject.toml, source layout, all module stubs, LICENSE, NOTICE, .gitignore, and package exports
@@ -96,4 +102,20 @@ Started: воскресенье, 15 марта 2026 г. 21:55:12 (EET)
   - `cleanup()` must reject pending futures BEFORE clearing `pending_calls` to avoid losing references
   - The `__anext__` method catches all exceptions and raises `StopAsyncIteration` — this is intentional so `async for` loops terminate on WebSocket disconnect
   - Per-session state includes both forward and reverse lookup maps (e.g., `client_rpcs` by ID and `client_rpc_uris` by URI) for O(1) lookups in both directions
+---
+
+## 2026-03-15 23:55 (EET) - US-006
+- What was implemented: WAMP session handshake (HELLO/WELCOME/GOODBYE/ABORT), subprotocol negotiation, WampHub session tracking with message dispatch loop
+- Files changed:
+  - src/fastapi_headless_wamp/session.py (added `negotiate_subprotocol()`, `perform_handshake()`, `handle_goodbye()`, `_send_abort()`, DEALER_FEATURES/BROKER_FEATURES constants, updated `generate_session_id()` to accept existing_ids for uniqueness)
+  - src/fastapi_headless_wamp/hub.py (full WampHub implementation: `sessions` property, `session_count`, `handle_websocket()`, `_message_loop()`)
+  - tests/test_handshake.py (25 tests: subprotocol negotiation (5), successful handshake + WELCOME structure (4), session ID uniqueness (2), GOODBYE flow (2), ABORT on invalid first message (6), disconnect during handshake (1), hub integration (5))
+  - .ralph/prd.json (US-006 passes: true)
+- **Learnings for future iterations:**
+  - `negotiate_subprotocol()` is a standalone function — it extracts the protocol name from `wamp.2.<protocol>` string and calls `get_serializer()`
+  - `perform_handshake()` returns bool (True=success) — caller decides whether to close WebSocket
+  - Hub's `_message_loop()` uses `async for msg in session` which terminates cleanly on WebSocket disconnect via StopAsyncIteration
+  - For hub integration tests with concurrent session tracking, use `asyncio.Event` pairs to pause the message loop and inspect hub state mid-connection
+  - `handle_websocket()` accepts the WebSocket, negotiates subprotocol, calls `websocket.accept(subprotocol=...)`, then orchestrates the full lifecycle
+  - The `scope["subprotocols"]` access on mock requires `scope: dict[str, Any]` with the subprotocols list
 ---
