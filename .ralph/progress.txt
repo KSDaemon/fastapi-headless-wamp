@@ -55,6 +55,7 @@ Started: воскресенье, 15 марта 2026 г. 21:55:12 (EET)
 - `session.publish(topic, args, kwargs, publisher)` sends EVENT only if the client has subscribed to the topic; otherwise it's a no-op (no error)
 - Publication IDs are per-session incrementing counters (`_publication_id_counter`), not hub-global
 - `hub.publish_to_all(topic, args, kwargs, publisher)` iterates all active sessions and calls `session.publish()` on each; catches exceptions per-session to avoid one failure stopping others
+- `hub.get_router(path="/ws")` returns a pre-configured `APIRouter`; use `app.include_router(hub.get_router())` for zero-boilerplate FastAPI integration
 - `@hub.subscribe(topic)` registers server-side event handlers in `_server_subscriptions: dict[str, list[RpcHandler]]`; multiple handlers per topic are supported
 - `_handle_publish()` invokes all registered server handlers for a topic; each handler exception is caught independently so one failure doesn't stop others
 - PUBLISHED acknowledgment uses hub-level `_next_hub_publication_id` counter (not per-session) since acknowledgments are hub-level responses
@@ -365,4 +366,18 @@ Started: воскресенье, 15 марта 2026 г. 21:55:12 (EET)
   - PUBLISH handling runs inline (not in a task) since subscription handlers are event handlers, not request-response; no CANCEL support needed
   - The `test_unhandled_message_type_logged_not_crashed` test was updated from PUBLISH to PUBLISHED — the next message type that gets a handler will need to change this again
   - No changes to service.py needed — the `@subscribe(topic)` decorator was already fully implemented in US-001 scaffolding
+---
+
+## 2026-03-15 44:00 (EET) - US-020
+- What was implemented: FastAPI integration — `WampHub.get_router(path)` method that returns a pre-configured `APIRouter` with a WebSocket endpoint; comprehensive integration tests in `tests/test_integration.py` covering both manual `handle_websocket` pattern and auto-mount `get_router` pattern
+- Files changed:
+  - src/fastapi_headless_wamp/hub.py (added `get_router()` method with `APIRouter` creation, `from fastapi import APIRouter` import, pyright ignore for decorator-registered route handler)
+  - tests/test_integration.py (new: 15 tests in 3 classes — `TestManualHandleWebsocket` (4 tests: handshake, blocking behavior, RPC call, lifecycle callbacks), `TestGetRouter` (5 tests: default path, custom path, RPC call, lifecycle callbacks, no-such-procedure error), `TestBothPatterns` (6 parametrized tests: handshake+RPC, subscribe, abort — each for manual and router patterns))
+  - .ralph/prd.json (US-020 passes: true)
+- **Learnings for future iterations:**
+  - `get_router()` uses a closure to capture `self` (the hub) so the WebSocket route handler doesn't depend on FastAPI dependency injection
+  - The route handler function registered via `@router.websocket(path)` is flagged as "not accessed" by pyright strict — use `# pyright: ignore[reportUnusedFunction]` to suppress
+  - `handle_websocket()` was already fully implemented in US-006/US-007 — US-020 only needed the `get_router()` convenience method and integration tests
+  - Both patterns (manual `@app.websocket` + `handle_websocket` and `app.include_router(get_router())`) produce identical behavior — the tests verify feature parity with parametrized tests
+  - The `starlette.testclient.TestClient` with `websocket_connect()` works synchronously but runs the async FastAPI handler in a thread — reliable for integration testing
 ---
