@@ -8,6 +8,7 @@ import logging
 from collections.abc import Awaitable, Callable
 from typing import Any
 
+from fastapi import APIRouter
 from starlette.websockets import WebSocket, WebSocketDisconnect
 
 from fastapi_headless_wamp.errors import WampCanceled, WampError
@@ -262,6 +263,35 @@ class WampHub:
                 await cb(session)
             except Exception as exc:
                 logger.error("on_session_close callback error: %s", exc, exc_info=True)
+
+    # ------------------------------------------------------------------
+    # FastAPI router integration
+    # ------------------------------------------------------------------
+
+    def get_router(self, path: str = "/ws") -> APIRouter:
+        """Return a pre-configured :class:`~fastapi.APIRouter` with a
+        WebSocket endpoint at *path*.
+
+        Usage::
+
+            app = FastAPI()
+            wamp = WampHub()
+            app.include_router(wamp.get_router(path="/ws"))
+
+        This is a convenience wrapper around :meth:`handle_websocket`
+        that avoids boilerplate.
+        """
+        router = APIRouter()
+
+        # Capture self (the hub) in the closure so the route handler
+        # has access to it without relying on FastAPI DI.
+        hub = self
+
+        @router.websocket(path)
+        async def _wamp_websocket(websocket: WebSocket) -> None:  # pyright: ignore[reportUnusedFunction]
+            await hub.handle_websocket(websocket)
+
+        return router
 
     # ------------------------------------------------------------------
     # CALL handling (client calls server-registered RPC)
