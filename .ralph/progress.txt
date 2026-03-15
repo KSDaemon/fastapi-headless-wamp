@@ -67,3 +67,16 @@ Started: воскресенье, 15 марта 2026 г. 21:55:12 (EET)
   - Subprotocol format is `wamp.2.<protocol>` (e.g. `wamp.2.json`); use `WAMP_SUBPROTOCOL_PREFIX` constant
   - Custom serializers only need to satisfy the `Serializer` Protocol (duck typing via `@runtime_checkable`); no base class inheritance needed
 ---
+
+## 2026-03-15 23:00 (EET) - US-004
+- What was implemented: Unit tests for the WAMP exception hierarchy (errors.py was already complete from US-001 scaffolding)
+- Files changed:
+  - tests/test_errors.py (44 tests: hierarchy/inheritance, URI attributes on class and instance, message formatting/repr, payload args/kwargs defaults and custom values, raise/catch round-trips preserving payload)
+  - .ralph/prd.json (US-004 passes: true)
+- **Learnings for future iterations:**
+  - The errors.py module was fully implemented during US-001 scaffolding; US-004 only needed tests
+  - Error classes use class-level `uri: str` attribute (not instance); accessible on both class and instance
+  - `WampError.__init__` normalizes `None` args/kwargs to empty list/dict via `or []` / `or {}`
+  - `WampCallTimeout` and `WampCanceled` share the same URI `wamp.error.canceled` — distinguish by exception type
+  - All error subclasses inherit payload support (wamp_args, wamp_kwargs) from WampError base
+---
