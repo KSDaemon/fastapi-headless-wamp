@@ -9,7 +9,11 @@ from typing import Any, AsyncIterator, Callable
 
 from starlette.websockets import WebSocket, WebSocketDisconnect
 
-from fastapi_headless_wamp.errors import WampError
+from fastapi_headless_wamp.errors import (
+    WampCallTimeout,
+    WampError,
+    WampNoSuchProcedure,
+)
 from fastapi_headless_wamp.protocol import (
     WAMP_ERROR_CLOSE_REALM,
     WAMP_ERROR_GOODBYE_AND_OUT,
@@ -287,6 +291,120 @@ class WampSession:
             self.realm,
         )
         return True
+
+    # ------------------------------------------------------------------
+    # Server calling client-registered RPCs
+    # ------------------------------------------------------------------
+
+    async def call(
+        self,
+        uri: str,
+        args: list[Any] | None = None,
+        kwargs: dict[str, Any] | None = None,
+        timeout: float | None = None,
+    ) -> Any:
+        """Call a client-registered RPC by URI.
+
+        Looks up *uri* in this session's ``client_rpc_uris`` map, sends an
+        INVOCATION to the client, and awaits the YIELD or ERROR response.
+
+        Args:
+            uri: The procedure URI to call.
+            args: Positional arguments for the invocation.
+            kwargs: Keyword arguments for the invocation.
+            timeout: Optional timeout in seconds. If the client does not
+                respond within this duration, :exc:`WampCallTimeout` is raised.
+
+        Returns:
+            The result value from the client's YIELD response.
+
+        Raises:
+            WampNoSuchProcedure: If the URI is not registered on this session.
+            WampCallTimeout: If the client does not respond within *timeout*.
+            WampError: If the client responds with an ERROR message.
+        """
+        # Look up URI in this session's client RPC map
+        registration_id = self.client_rpc_uris.get(uri)
+        if registration_id is None:
+            raise WampNoSuchProcedure(
+                f"Procedure '{uri}' not registered on session {self.session_id}"
+            )
+
+        request_id = self.next_request_id()
+
+        # Create a Future for the response
+        loop = asyncio.get_running_loop()
+        future: asyncio.Future[Any] = loop.create_future()
+        self.pending_calls[request_id] = future
+
+        # Build INVOCATION message
+        invocation_msg: list[Any] = [
+            WampMessageType.INVOCATION,
+            request_id,
+            registration_id,
+            {},  # details
+        ]
+        if kwargs:
+            invocation_msg.append(args or [])
+            invocation_msg.append(kwargs)
+        elif args:
+            invocation_msg.append(args)
+
+        await self.send_message(invocation_msg)
+        logger.debug(
+            "Session %d: sent INVOCATION for '%s' (request_id=%d)",
+            self.session_id,
+            uri,
+            request_id,
+        )
+
+        # Await the response with optional timeout
+        try:
+            if timeout is not None and timeout > 0:
+                result = await asyncio.wait_for(future, timeout=timeout)
+            else:
+                result = await future
+        except asyncio.TimeoutError:
+            # Clean up the pending call
+            self.pending_calls.pop(request_id, None)
+            raise WampCallTimeout(
+                f"Call to '{uri}' on session {self.session_id} timed out "
+                f"after {timeout}s"
+            )
+        finally:
+            # Always clean up if still present
+            self.pending_calls.pop(request_id, None)
+
+        return result
+
+    def resolve_pending_call(self, request_id: int, result: Any) -> None:
+        """Resolve a pending call future with a successful result.
+
+        Called by the hub when a YIELD message is received from the client.
+        """
+        future = self.pending_calls.get(request_id)
+        if future is not None and not future.done():
+            future.set_result(result)
+            logger.debug(
+                "Session %d: resolved pending call %d",
+                self.session_id,
+                request_id,
+            )
+
+    def reject_pending_call(self, request_id: int, error: Exception) -> None:
+        """Reject a pending call future with an error.
+
+        Called by the hub when an ERROR message is received for an INVOCATION.
+        """
+        future = self.pending_calls.get(request_id)
+        if future is not None and not future.done():
+            future.set_exception(error)
+            logger.debug(
+                "Session %d: rejected pending call %d with %s",
+                self.session_id,
+                request_id,
+                type(error).__name__,
+            )
 
     async def handle_goodbye(self, msg: list[Any]) -> None:
         """Handle a GOODBYE message from the client.

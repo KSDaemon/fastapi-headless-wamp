@@ -17,8 +17,10 @@ from fastapi_headless_wamp.protocol import (
     WAMP_ERROR_RUNTIME_ERROR,
     WampMessageType,
     validate_call,
+    validate_error,
     validate_register,
     validate_unregister,
+    validate_yield,
 )
 from fastapi_headless_wamp.service import WampService
 from fastapi_headless_wamp.session import RpcHandler, WampSession, negotiate_subprotocol
@@ -423,6 +425,69 @@ class WampHub:
         )
 
     # ------------------------------------------------------------------
+    # YIELD handling (client responds to server's INVOCATION)
+    # ------------------------------------------------------------------
+
+    async def _handle_yield(self, session: WampSession, msg: list[Any]) -> None:
+        """Handle a YIELD message from the client.
+
+        Resolves the pending call Future for the corresponding INVOCATION.
+
+        YIELD format: [YIELD, INVOCATION.Request|id, Options|dict, Arguments|list?, ArgumentsKw|dict?]
+        """
+        try:
+            validate_yield(msg)
+        except WampError as exc:
+            logger.warning(
+                "Session %d: invalid YIELD message: %s", session.session_id, exc
+            )
+            return
+
+        request_id: int = msg[1]
+        # options: dict[str, Any] = msg[2]  # reserved for future use (progressive)
+        yield_args: list[Any] = msg[3] if len(msg) > 3 else []
+        # yield_kwargs: dict[str, Any] = msg[4] if len(msg) > 4 else {}
+
+        # Extract result: single value or the args list
+        if len(yield_args) == 1:
+            result = yield_args[0]
+        elif len(yield_args) > 1:
+            result = yield_args
+        else:
+            result = None
+
+        session.resolve_pending_call(request_id, result)
+
+    async def _handle_invocation_error(
+        self, session: WampSession, msg: list[Any]
+    ) -> None:
+        """Handle an ERROR message in response to an INVOCATION.
+
+        Rejects the pending call Future with an appropriate exception.
+
+        ERROR format: [ERROR, REQUEST.Type|int, REQUEST.Request|id, Details|dict, Error|uri, Arguments|list?, ArgumentsKw|dict?]
+        """
+        try:
+            validate_error(msg)
+        except WampError as exc:
+            logger.warning(
+                "Session %d: invalid ERROR message: %s", session.session_id, exc
+            )
+            return
+
+        request_id: int = msg[2]
+        error_uri: str = msg[4]
+        error_args: list[Any] = msg[5] if len(msg) > 5 else []
+        error_kwargs: dict[str, Any] = msg[6] if len(msg) > 6 else {}
+
+        error_message = error_args[0] if error_args else error_uri
+        exception = WampError(str(error_message), args=error_args, kwargs=error_kwargs)
+        # Set the URI from the error message
+        exception.uri = error_uri
+
+        session.reject_pending_call(request_id, exception)
+
+    # ------------------------------------------------------------------
     # WebSocket handler
     # ------------------------------------------------------------------
 
@@ -518,6 +583,18 @@ class WampHub:
                 await self._handle_register(session, msg)
             elif msg_type == WampMessageType.UNREGISTER:
                 await self._handle_unregister(session, msg)
+            elif msg_type == WampMessageType.YIELD:
+                await self._handle_yield(session, msg)
+            elif msg_type == WampMessageType.ERROR:
+                # ERROR can be in response to INVOCATION (server calling client)
+                if len(msg) >= 3 and msg[1] == WampMessageType.INVOCATION:
+                    await self._handle_invocation_error(session, msg)
+                else:
+                    logger.debug(
+                        "Session %d: unhandled ERROR for request type %s",
+                        session.session_id,
+                        msg[1] if len(msg) > 1 else "unknown",
+                    )
             else:
                 # Future stories will add handlers for SUBSCRIBE, PUBLISH, etc.
                 logger.debug(
