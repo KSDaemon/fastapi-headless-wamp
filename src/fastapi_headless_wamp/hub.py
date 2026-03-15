@@ -14,13 +14,16 @@ from fastapi_headless_wamp.errors import WampCanceled, WampError
 from fastapi_headless_wamp.protocol import (
     WAMP_ERROR_CANCELED,
     WAMP_ERROR_NO_SUCH_PROCEDURE,
+    WAMP_ERROR_NO_SUCH_SUBSCRIPTION,
     WAMP_ERROR_RUNTIME_ERROR,
     WampMessageType,
     validate_call,
     validate_cancel,
     validate_error,
     validate_register,
+    validate_subscribe,
     validate_unregister,
+    validate_unsubscribe,
     validate_yield,
 )
 from fastapi_headless_wamp.service import WampService
@@ -61,6 +64,8 @@ class WampHub:
         )
         # Counter for generating unique registration IDs
         self._next_registration_id: int = 0
+        # Counter for generating unique subscription IDs
+        self._next_subscription_id: int = 0
 
     @property
     def sessions(self) -> dict[int, WampSession]:
@@ -813,6 +818,102 @@ class WampHub:
         )
 
     # ------------------------------------------------------------------
+    # Client SUBSCRIBE / UNSUBSCRIBE handling (PubSub)
+    # ------------------------------------------------------------------
+
+    def _generate_subscription_id(self) -> int:
+        """Generate a unique subscription ID for a client subscription."""
+        self._next_subscription_id += 1
+        return self._next_subscription_id
+
+    async def _handle_subscribe(self, session: WampSession, msg: list[Any]) -> None:
+        """Handle a SUBSCRIBE message from the client.
+
+        Stores the topic in the session's ``subscriptions`` map with a
+        unique subscription ID and sends SUBSCRIBED back.
+
+        Subscriptions are per-session (isolated, not shared across clients).
+        """
+        try:
+            validate_subscribe(msg)
+        except WampError as exc:
+            logger.warning(
+                "Session %d: invalid SUBSCRIBE message: %s", session.session_id, exc
+            )
+            return
+
+        request_id: int = msg[1]
+        # options: dict[str, Any] = msg[2]  # reserved for future use
+        topic: str = msg[3]
+
+        subscription_id = self._generate_subscription_id()
+
+        # Store in session's subscription maps (per-session, isolated)
+        session.subscriptions[subscription_id] = topic
+        session.subscription_uris[topic] = subscription_id
+
+        # Send SUBSCRIBED
+        subscribed_msg: list[Any] = [
+            WampMessageType.SUBSCRIBED,
+            request_id,
+            subscription_id,
+        ]
+        await session.send_message(subscribed_msg)
+        logger.info(
+            "Session %d: subscribed to '%s' (subscription_id=%d)",
+            session.session_id,
+            topic,
+            subscription_id,
+        )
+
+    async def _handle_unsubscribe(self, session: WampSession, msg: list[Any]) -> None:
+        """Handle an UNSUBSCRIBE message from the client.
+
+        Removes the topic from the session's ``subscriptions`` map and
+        sends UNSUBSCRIBED back.
+        """
+        try:
+            validate_unsubscribe(msg)
+        except WampError as exc:
+            logger.warning(
+                "Session %d: invalid UNSUBSCRIBE message: %s", session.session_id, exc
+            )
+            return
+
+        request_id: int = msg[1]
+        subscription_id: int = msg[2]
+
+        # Look up subscription
+        topic = session.subscriptions.get(subscription_id)
+        if topic is None:
+            error_msg: list[Any] = [
+                WampMessageType.ERROR,
+                WampMessageType.UNSUBSCRIBE,
+                request_id,
+                {},
+                WAMP_ERROR_NO_SUCH_SUBSCRIPTION,
+            ]
+            await session.send_message(error_msg)
+            return
+
+        # Remove from session's maps
+        del session.subscriptions[subscription_id]
+        session.subscription_uris.pop(topic, None)
+
+        # Send UNSUBSCRIBED
+        unsubscribed_msg: list[Any] = [
+            WampMessageType.UNSUBSCRIBED,
+            request_id,
+        ]
+        await session.send_message(unsubscribed_msg)
+        logger.info(
+            "Session %d: unsubscribed from '%s' (subscription_id=%d)",
+            session.session_id,
+            topic,
+            subscription_id,
+        )
+
+    # ------------------------------------------------------------------
     # YIELD handling (client responds to server's INVOCATION)
     # ------------------------------------------------------------------
 
@@ -1031,6 +1132,10 @@ class WampHub:
                 await self._handle_register(session, msg)
             elif msg_type == WampMessageType.UNREGISTER:
                 await self._handle_unregister(session, msg)
+            elif msg_type == WampMessageType.SUBSCRIBE:
+                await self._handle_subscribe(session, msg)
+            elif msg_type == WampMessageType.UNSUBSCRIBE:
+                await self._handle_unsubscribe(session, msg)
             elif msg_type == WampMessageType.YIELD:
                 await self._handle_yield(session, msg)
             elif msg_type == WampMessageType.ERROR:

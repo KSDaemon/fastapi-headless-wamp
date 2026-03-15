@@ -430,16 +430,16 @@ class TestMessageDispatch:
         assert len(ws.sent_texts) == 2
 
     async def test_unhandled_message_type_logged_not_crashed(self) -> None:
-        """Known but unhandled message types (e.g. SUBSCRIBE) are skipped for now."""
+        """Known but unhandled message types (e.g. PUBLISH) are skipped for now."""
         hub = WampHub(realm="realm1")
         ws = MockWebSocket(subprotocols=["wamp.2.json"])
 
         hello: list[Any] = [WampMessageType.HELLO, "realm1", {"roles": {}}]
-        # SUBSCRIBE message type is known but has no handler yet
-        subscribe: list[Any] = [WampMessageType.SUBSCRIBE, 1, {}, "com.topic"]
+        # PUBLISH message type is known but has no handler yet
+        publish: list[Any] = [WampMessageType.PUBLISH, 1, {}, "com.topic"]
         goodbye: list[Any] = [WampMessageType.GOODBYE, {}, "wamp.close.normal"]
         ws.enqueue_text(json.dumps(hello))
-        ws.enqueue_text(json.dumps(subscribe))
+        ws.enqueue_text(json.dumps(publish))
         ws.enqueue_text(json.dumps(goodbye))
 
         await hub.handle_websocket(ws)  # type: ignore[arg-type]
