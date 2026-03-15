@@ -2,14 +2,23 @@
 
 from __future__ import annotations
 
+import asyncio
+import inspect
 import logging
 from collections.abc import Awaitable, Callable
 from typing import Any
 
 from starlette.websockets import WebSocket, WebSocketDisconnect
 
-from fastapi_headless_wamp.protocol import WampMessageType
-from fastapi_headless_wamp.session import WampSession, negotiate_subprotocol
+from fastapi_headless_wamp.errors import WampError
+from fastapi_headless_wamp.protocol import (
+    WAMP_ERROR_CANCELED,
+    WAMP_ERROR_NO_SUCH_PROCEDURE,
+    WAMP_ERROR_RUNTIME_ERROR,
+    WampMessageType,
+    validate_call,
+)
+from fastapi_headless_wamp.session import RpcHandler, WampSession, negotiate_subprotocol
 
 logger = logging.getLogger(__name__)
 
@@ -21,12 +30,17 @@ def _session_callback_list() -> list[SessionCallback]:
     return []
 
 
+def _rpc_registry() -> dict[str, RpcHandler]:
+    return {}
+
+
 class WampHub:
     """Central hub that manages WAMP sessions and routes messages."""
 
     def __init__(self, realm: str = "realm1") -> None:
         self.realm = realm
         self._sessions: dict[int, WampSession] = {}
+        self._server_rpcs: dict[str, RpcHandler] = _rpc_registry()
         self._on_session_open_callbacks: list[SessionCallback] = (
             _session_callback_list()
         )
@@ -47,6 +61,30 @@ class WampHub:
     def _active_session_ids(self) -> set[int]:
         """Return the set of currently active session IDs."""
         return set(self._sessions.keys())
+
+    # ------------------------------------------------------------------
+    # RPC registration decorator
+    # ------------------------------------------------------------------
+
+    def register(self, uri: str) -> Callable[..., Any]:
+        """Decorator to register a function as a server-side RPC handler.
+
+        Usage::
+
+            @wamp.register("com.example.add")
+            async def add(a: int, b: int) -> int:
+                return a + b
+
+        Both ``async def`` and regular ``def`` functions are supported.
+        Sync functions are automatically run via :func:`asyncio.to_thread`.
+        """
+
+        def decorator(func: Callable[..., Any]) -> Callable[..., Any]:
+            self._server_rpcs[uri] = func
+            logger.info("Registered server RPC: %s", uri)
+            return func
+
+        return decorator
 
     # ------------------------------------------------------------------
     # Lifecycle callback decorators
@@ -97,6 +135,137 @@ class WampHub:
                 await cb(session)
             except Exception as exc:
                 logger.error("on_session_close callback error: %s", exc, exc_info=True)
+
+    # ------------------------------------------------------------------
+    # CALL handling (client calls server-registered RPC)
+    # ------------------------------------------------------------------
+
+    async def _handle_call(self, session: WampSession, msg: list[Any]) -> None:
+        """Handle a CALL message from the client.
+
+        Looks up the procedure URI in the hub's server RPC registry,
+        invokes the handler, and sends RESULT or ERROR back.
+        """
+        try:
+            validate_call(msg)
+        except WampError as exc:
+            logger.warning(
+                "Session %d: invalid CALL message: %s", session.session_id, exc
+            )
+            return
+
+        request_id: int = msg[1]
+        options: dict[str, Any] = msg[2]
+        procedure: str = msg[3]
+        call_args: list[Any] = msg[4] if len(msg) > 4 else []
+        call_kwargs: dict[str, Any] = msg[5] if len(msg) > 5 else {}
+
+        # Look up handler
+        handler = self._server_rpcs.get(procedure)
+        if handler is None:
+            error_msg: list[Any] = [
+                WampMessageType.ERROR,
+                WampMessageType.CALL,
+                request_id,
+                {},
+                WAMP_ERROR_NO_SUCH_PROCEDURE,
+            ]
+            await session.send_message(error_msg)
+            return
+
+        # caller_identification: pass caller session ID if disclose_me is set
+        caller_kwargs = dict(call_kwargs)
+        if options.get("disclose_me"):
+            caller_kwargs["_caller_session_id"] = session.session_id
+
+        # Determine timeout from options (milliseconds -> seconds)
+        timeout_ms = options.get("timeout")
+        timeout_s: float | None = None
+        if (
+            timeout_ms is not None
+            and isinstance(timeout_ms, (int, float))
+            and timeout_ms > 0
+        ):
+            timeout_s = timeout_ms / 1000.0
+
+        # Invoke handler
+        try:
+            if inspect.iscoroutinefunction(handler):
+                coro = handler(*call_args, **caller_kwargs)
+            else:
+                # Sync handler: run in thread
+                coro = asyncio.to_thread(handler, *call_args, **caller_kwargs)
+
+            if timeout_s is not None:
+                result = await asyncio.wait_for(coro, timeout=timeout_s)
+            else:
+                result = await coro
+
+        except asyncio.TimeoutError:
+            error_msg = [
+                WampMessageType.ERROR,
+                WampMessageType.CALL,
+                request_id,
+                {},
+                WAMP_ERROR_CANCELED,
+            ]
+            await session.send_message(error_msg)
+            return
+        except asyncio.CancelledError:
+            error_msg = [
+                WampMessageType.ERROR,
+                WampMessageType.CALL,
+                request_id,
+                {},
+                WAMP_ERROR_CANCELED,
+            ]
+            await session.send_message(error_msg)
+            return
+        except WampError as exc:
+            # WAMP-typed exception from handler
+            error_msg = [
+                WampMessageType.ERROR,
+                WampMessageType.CALL,
+                request_id,
+                {},
+                exc.uri,
+            ]
+            if exc.wamp_args:
+                error_msg.append(exc.wamp_args)
+            if exc.wamp_kwargs:
+                if len(error_msg) == 5:
+                    error_msg.append([])  # args placeholder
+                error_msg.append(exc.wamp_kwargs)
+            await session.send_message(error_msg)
+            return
+        except Exception as exc:
+            logger.error(
+                "Session %d: RPC handler '%s' raised: %s",
+                session.session_id,
+                procedure,
+                exc,
+                exc_info=True,
+            )
+            error_msg = [
+                WampMessageType.ERROR,
+                WampMessageType.CALL,
+                request_id,
+                {},
+                WAMP_ERROR_RUNTIME_ERROR,
+                [str(exc)],
+            ]
+            await session.send_message(error_msg)
+            return
+
+        # Build RESULT message
+        result_msg: list[Any] = [
+            WampMessageType.RESULT,
+            request_id,
+            {},
+        ]
+        if result is not None:
+            result_msg.append([result])
+        await session.send_message(result_msg)
 
     # ------------------------------------------------------------------
     # WebSocket handler
@@ -188,8 +357,10 @@ class WampHub:
             if msg_type == WampMessageType.GOODBYE:
                 await session.handle_goodbye(msg)
                 break
+            elif msg_type == WampMessageType.CALL:
+                await self._handle_call(session, msg)
             else:
-                # Future stories will add handlers for CALL, REGISTER, etc.
+                # Future stories will add handlers for REGISTER, SUBSCRIBE, etc.
                 logger.debug(
                     "Session %d: unhandled message type %s",
                     session.session_id,

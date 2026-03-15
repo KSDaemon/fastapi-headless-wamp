@@ -430,16 +430,16 @@ class TestMessageDispatch:
         assert len(ws.sent_texts) == 2
 
     async def test_unhandled_message_type_logged_not_crashed(self) -> None:
-        """Known but unhandled message types (e.g. CALL) are skipped for now."""
+        """Known but unhandled message types (e.g. REGISTER) are skipped for now."""
         hub = WampHub(realm="realm1")
         ws = MockWebSocket(subprotocols=["wamp.2.json"])
 
         hello: list[Any] = [WampMessageType.HELLO, "realm1", {"roles": {}}]
-        # CALL message type is known but has no handler yet
-        call: list[Any] = [WampMessageType.CALL, 1, {}, "com.foo"]
+        # REGISTER message type is known but has no handler yet
+        register: list[Any] = [WampMessageType.REGISTER, 1, {}, "com.foo"]
         goodbye: list[Any] = [WampMessageType.GOODBYE, {}, "wamp.close.normal"]
         ws.enqueue_text(json.dumps(hello))
-        ws.enqueue_text(json.dumps(call))
+        ws.enqueue_text(json.dumps(register))
         ws.enqueue_text(json.dumps(goodbye))
 
         await hub.handle_websocket(ws)  # type: ignore[arg-type]

@@ -24,6 +24,11 @@ Started: воскресенье, 15 марта 2026 г. 21:55:12 (EET)
 - Lifecycle callbacks: `@hub.on_session_open` / `@hub.on_session_close` are decorators on WampHub that register async callbacks; they fire in order and catch exceptions to avoid crashing the hub
 - For FastAPI integration tests, the `@app.websocket` handler parameter must be typed as `fastapi.WebSocket` (not `Any`), otherwise FastAPI's DI validation rejects the connection
 - `SessionCallback = Callable[[WampSession], Awaitable[None]]` is the type alias for lifecycle callbacks in hub.py
+- `hub.register(uri)` decorator stores handlers in `_server_rpcs: dict[str, RpcHandler]`; CALL dispatch in `_handle_call()` looks up procedure URI there
+- For `call_timeout`, client sends `timeout` in CALL options (milliseconds); server uses `asyncio.wait_for(coro, timeout=seconds)` and sends `wamp.error.canceled` on timeout
+- `caller_identification`: when `disclose_me: True` in CALL options, `_caller_session_id` is injected into handler kwargs
+- Sync RPC handlers are detected via `inspect.iscoroutinefunction()` and dispatched via `asyncio.to_thread()`
+- When adding new message handlers to the dispatch loop, update existing tests that assumed those types were "unhandled" (e.g., `test_unhandled_message_type_logged_not_crashed` in test_hub.py)
 
 ## 2026-03-15 21:57 (EET) - US-001
 - What was implemented: Full project scaffolding with pyproject.toml, source layout, all module stubs, LICENSE, NOTICE, .gitignore, and package exports
@@ -135,4 +140,20 @@ Started: воскресенье, 15 марта 2026 г. 21:55:12 (EET)
   - Lifecycle callback decorators on WampHub are simple: append to a list, return the function unchanged. Each callback is wrapped in try/except so one failing callback doesn't prevent others from running
   - `on_session_close` fires BEFORE `session.cleanup()` so the callback can still inspect session state (e.g., session is still in `hub.sessions` during the callback)
   - `starlette.testclient.TestClient` with `websocket_connect()` works synchronously but runs the async FastAPI handler in a thread — good enough for integration testing
+---
+
+## 2026-03-15 25:15 (EET) - US-008
+- What was implemented: Server-side RPC registration via `@wamp.register(uri)` decorator on WampHub, CALL message dispatch to registered handlers, sync/async handler support, error handling (runtime_error, no_such_procedure, WampError subclasses with payload), call_timeout, and caller_identification (disclose_me)
+- Files changed:
+  - src/fastapi_headless_wamp/hub.py (added `_server_rpcs` registry, `register()` decorator, `_handle_call()` method with full CALL→RESULT/ERROR handling, CALL routing in `_message_loop()`, new imports for asyncio/inspect/errors/protocol)
+  - tests/test_rpc.py (new: 23 tests covering decorator registration, async handler success, kwargs, None return, request ID matching, sync handler success/exception, runtime error, WampError URI/payload, no_such_procedure, timeout, timeout=0 ignored, caller_identification with/without disclose_me, multiple sequential calls, mixed success/error, mock-based unit tests)
+  - tests/test_hub.py (updated `test_unhandled_message_type_logged_not_crashed` to use REGISTER instead of CALL since CALL is now handled)
+  - .ralph/prd.json (US-008 passes: true)
+- **Learnings for future iterations:**
+  - When adding a new message type handler to the hub dispatch loop, check existing test_hub.py tests for assumptions about "unhandled" types — they may need updating
+  - `_handle_call()` catches both `asyncio.TimeoutError` and `asyncio.CancelledError` separately to send proper WAMP error responses
+  - `inspect.iscoroutinefunction()` is used to distinguish async from sync handlers; `asyncio.to_thread()` dispatches sync handlers
+  - WampError subclasses carry their own URI via class-level `uri` attribute; `_handle_call()` uses this for typed WAMP error responses
+  - `caller_kwargs` is a shallow copy of `call_kwargs` to avoid mutating the original; `_caller_session_id` is injected only when `disclose_me: True`
+  - For pyright strict mode in tests, use `getattr(hub, "_server_rpcs")` instead of direct `hub._server_rpcs` to avoid "protected member" errors
 ---
