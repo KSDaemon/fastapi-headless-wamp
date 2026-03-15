@@ -14,7 +14,13 @@ from fastapi_headless_wamp.errors import (
     WampRuntimeError,
 )
 from fastapi_headless_wamp.hub import WampHub
-from fastapi_headless_wamp.serializers import JsonSerializer, Serializer
+from fastapi_headless_wamp.serializers import (
+    JsonSerializer,
+    Serializer,
+    get_available_subprotocols,
+    get_serializer,
+    register_serializer,
+)
 from fastapi_headless_wamp.service import WampService, rpc, subscribe
 from fastapi_headless_wamp.session import WampSession
 
@@ -32,6 +38,9 @@ __all__ = [
     # Serializers
     "Serializer",
     "JsonSerializer",
+    "register_serializer",
+    "get_serializer",
+    "get_available_subprotocols",
     # Errors
     "WampError",
     "WampProtocolError",

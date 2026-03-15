@@ -53,3 +53,17 @@ Started: воскресенье, 15 марта 2026 г. 21:55:12 (EET)
   - Deferred imports in dataclass `to_list()` methods cleanly avoid circular deps between types.py and protocol.py
   - When writing test imports, double-check every name is actually in the import block — easy to miss one in a long list
 ---
+
+## 2026-03-15 22:35 (EET) - US-003
+- What was implemented: Pluggable serialization system with global registry, WAMP subprotocol string support, and auto-registration of JsonSerializer
+- Files changed:
+  - src/fastapi_headless_wamp/serializers.py (added `register_serializer`, `get_serializer`, `get_available_subprotocols`, `WAMP_SUBPROTOCOL_PREFIX`, module-level `register_serializer(JsonSerializer())`)
+  - src/fastapi_headless_wamp/__init__.py (added exports for `register_serializer`, `get_serializer`, `get_available_subprotocols`)
+  - tests/test_serializers.py (17 tests: JsonSerializer encode/decode/roundtrip, protocol properties, Serializer protocol conformance, registry default/lookup/custom/replace, subprotocol strings)
+  - .ralph/prd.json (US-003 passes: true)
+- **Learnings for future iterations:**
+  - The serializer registry uses a module-level `_registry` dict; `JsonSerializer` is registered at import time via `register_serializer(JsonSerializer())` at bottom of module
+  - `get_serializer()` raises `KeyError` for unknown protocols — callers should handle this
+  - Subprotocol format is `wamp.2.<protocol>` (e.g. `wamp.2.json`); use `WAMP_SUBPROTOCOL_PREFIX` constant
+  - Custom serializers only need to satisfy the `Serializer` Protocol (duck typing via `@runtime_checkable`); no base class inheritance needed
+---
