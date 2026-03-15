@@ -18,6 +18,7 @@ from fastapi_headless_wamp.protocol import (
     WampMessageType,
     validate_call,
 )
+from fastapi_headless_wamp.service import WampService
 from fastapi_headless_wamp.session import RpcHandler, WampSession, negotiate_subprotocol
 
 logger = logging.getLogger(__name__)
@@ -85,6 +86,59 @@ class WampHub:
             return func
 
         return decorator
+
+    # ------------------------------------------------------------------
+    # Service registration
+    # ------------------------------------------------------------------
+
+    def register_service(self, service: WampService) -> None:
+        """Register all ``@rpc``-marked methods of a :class:`WampService`.
+
+        Introspects the service instance for methods decorated with
+        :func:`rpc`, constructs the full URI from the service prefix and
+        the method's URI (or name), and registers them on the hub.
+
+        The service's :attr:`~WampService.hub` attribute is set to this
+        hub instance so that service methods can access it via
+        ``self.hub``.
+
+        Both ``async def`` and regular ``def`` methods are supported.
+        Sync methods are automatically run via :func:`asyncio.to_thread`.
+        """
+        service.hub = self
+
+        prefix = service.prefix
+        for attr_name in dir(service):
+            attr = getattr(service, attr_name)
+            if not callable(attr):
+                continue
+            rpc_uri: str | None = getattr(attr, "_rpc_uri", None)
+            # _rpc_uri is set by the @rpc() decorator.
+            # It can be:
+            #   - a string (explicit URI)
+            #   - None (infer from method name)
+            # If the attribute doesn't have _rpc_uri at all, skip it.
+            if not hasattr(attr, "_rpc_uri"):
+                continue
+
+            # Build full URI
+            if rpc_uri is not None:
+                method_uri = rpc_uri
+            else:
+                method_uri = attr_name
+
+            if prefix:
+                full_uri = f"{prefix}.{method_uri}"
+            else:
+                full_uri = method_uri
+
+            self._server_rpcs[full_uri] = attr
+            logger.info(
+                "Registered service RPC: %s (from %s.%s)",
+                full_uri,
+                type(service).__name__,
+                attr_name,
+            )
 
     # ------------------------------------------------------------------
     # Lifecycle callback decorators

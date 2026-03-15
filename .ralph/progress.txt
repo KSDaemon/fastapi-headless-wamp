@@ -29,6 +29,8 @@ Started: воскресенье, 15 марта 2026 г. 21:55:12 (EET)
 - `caller_identification`: when `disclose_me: True` in CALL options, `_caller_session_id` is injected into handler kwargs
 - Sync RPC handlers are detected via `inspect.iscoroutinefunction()` and dispatched via `asyncio.to_thread()`
 - When adding new message handlers to the dispatch loop, update existing tests that assumed those types were "unhandled" (e.g., `test_unhandled_message_type_logged_not_crashed` in test_hub.py)
+- `WampService` uses `TYPE_CHECKING` guard for hub import to avoid circular deps; `hub.py` imports `WampService` at runtime
+- `register_service()` uses `hasattr(attr, "_rpc_uri")` to detect @rpc-decorated methods; `_rpc_uri` can be `None` (infer from name) or a string
 
 ## 2026-03-15 21:57 (EET) - US-001
 - What was implemented: Full project scaffolding with pyproject.toml, source layout, all module stubs, LICENSE, NOTICE, .gitignore, and package exports
@@ -156,4 +158,20 @@ Started: воскресенье, 15 марта 2026 г. 21:55:12 (EET)
   - WampError subclasses carry their own URI via class-level `uri` attribute; `_handle_call()` uses this for typed WAMP error responses
   - `caller_kwargs` is a shallow copy of `call_kwargs` to avoid mutating the original; `_caller_session_id` is injected only when `disclose_me: True`
   - For pyright strict mode in tests, use `getattr(hub, "_server_rpcs")` instead of direct `hub._server_rpcs` to avoid "protected member" errors
+---
+
+## 2026-03-15 26:00 (EET) - US-009
+- What was implemented: Class-based WampService with @rpc decorator, WampHub.register_service() method for introspecting and registering service RPCs
+- Files changed:
+  - src/fastapi_headless_wamp/service.py (full WampService implementation: prefix attribute, hub attribute, @rpc decorator with explicit/inferred URI, @subscribe decorator)
+  - src/fastapi_headless_wamp/hub.py (added `register_service()` method that introspects service for @rpc-marked methods, builds full URIs from prefix, and registers them; added import of WampService)
+  - tests/test_service.py (new: 18 tests covering @rpc decorator marking, register_service introspection, prefix resolution, no-prefix services, hub attribute, multiple services, standalone+service coexistence, end-to-end invocation of async/sync/explicit-URI methods, hub access from service, exception handling, nonexistent URIs, sequential calls)
+  - .ralph/prd.json (US-009 passes: true)
+- **Learnings for future iterations:**
+  - `@rpc()` sets `_rpc_uri = None` on the method (infer URI from method name); `@rpc("uri")` sets `_rpc_uri = "uri"`
+  - `register_service()` uses `hasattr(attr, "_rpc_uri")` to detect @rpc-decorated methods (not `_rpc_uri is not None`, since None is the inferred case)
+  - Full URI = `prefix + '.' + (explicit_uri or method_name)` when prefix is set; just `(explicit_uri or method_name)` when prefix is empty
+  - Service methods are bound methods — they receive `self` automatically, so hub CALL dispatch works without special handling
+  - `service.hub` is set to the WampHub during `register_service()` so service methods can access the hub via `self.hub`
+  - WampService uses `TYPE_CHECKING` guard for the `WampHub` import to avoid circular imports between service.py and hub.py
 ---
