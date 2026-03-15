@@ -381,3 +381,20 @@ Started: воскресенье, 15 марта 2026 г. 21:55:12 (EET)
   - Both patterns (manual `@app.websocket` + `handle_websocket` and `app.include_router(get_router())`) produce identical behavior — the tests verify feature parity with parametrized tests
   - The `starlette.testclient.TestClient` with `websocket_connect()` works synchronously but runs the async FastAPI handler in a thread — reliable for integration testing
 ---
+
+## 2026-03-15 46:00 (EET) - US-021
+- What was implemented: Comprehensive integration test suite (27 new tests in 9 test classes) simulating wampy.js message sequences for the full feature surface — added to existing `tests/test_integration.py`
+- Files changed:
+  - tests/test_integration.py (added 9 new test classes: TestFullSessionLifecycle, TestBidirectionalRPC, TestProgressiveResultsE2E, TestCallCancellationE2E, TestMultipleConcurrentConnections, TestErrorPaths, TestClassBasedServiceIntegration, TestSyncHandlerIntegration, TestCallerIdentificationE2E, TestCallTimeoutE2E; total 42 integration tests, 27 new)
+  - .ralph/prd.json (US-021 passes: true)
+  - .ralph/progress.txt (appended progress)
+- **Learnings for future iterations:**
+  - For server-to-client RPC testing via FastAPI TestClient, use `@hub.on_session_open` + `asyncio.create_task()` with a small `asyncio.sleep()` to let the client register procedures before the server calls them
+  - `time.sleep()` (not `asyncio.sleep()`) is needed in the synchronous test client context to let the async server process messages
+  - Starlette TestClient supports multiple concurrent WebSocket connections from the same client — nest `with client.websocket_connect(...)` blocks to test session isolation
+  - Progressive results from server: client receives RESULT messages with `details.progress = True` for intermediates, then a final RESULT with empty details
+  - Progressive results to client: server sends INVOCATION with `details.receive_progress = True`, client sends YIELD with `options.progress = True` for intermediates
+  - For cancellation testing, `time.sleep(0.2)` before CANCEL gives the handler enough time to start running in its task
+  - Disconnect without GOODBYE still triggers `on_session_close` callback and hub cleanup — the message loop catches the WebSocketDisconnect exception
+  - No changes to source code were needed — all acceptance criteria were met by adding integration tests only
+---
