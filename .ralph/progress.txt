@@ -55,6 +55,12 @@ Started: воскресенье, 15 марта 2026 г. 21:55:12 (EET)
 - `session.publish(topic, args, kwargs, publisher)` sends EVENT only if the client has subscribed to the topic; otherwise it's a no-op (no error)
 - Publication IDs are per-session incrementing counters (`_publication_id_counter`), not hub-global
 - `hub.publish_to_all(topic, args, kwargs, publisher)` iterates all active sessions and calls `session.publish()` on each; catches exceptions per-session to avoid one failure stopping others
+- `@hub.subscribe(topic)` registers server-side event handlers in `_server_subscriptions: dict[str, list[RpcHandler]]`; multiple handlers per topic are supported
+- `_handle_publish()` invokes all registered server handlers for a topic; each handler exception is caught independently so one failure doesn't stop others
+- PUBLISHED acknowledgment uses hub-level `_next_hub_publication_id` counter (not per-session) since acknowledgments are hub-level responses
+- For server subscription handlers, `_session` kwarg is injected if handler signature accepts it (checked via `inspect.signature()`); same pattern as `_caller_session_id` / `_progress`
+- `register_service()` now also introspects for `_subscribe_topic` attribute (set by `@subscribe(topic)` decorator) and registers subscription handlers with prefix resolution
+- When adding new message type handlers to the dispatch loop, update `test_unhandled_message_type_logged_not_crashed` in test_hub.py to use a different still-unhandled message type (changed from PUBLISH to PUBLISHED)
 
 ## 2026-03-15 21:57 (EET) - US-001
 - What was implemented: Full project scaffolding with pyproject.toml, source layout, all module stubs, LICENSE, NOTICE, .gitignore, and package exports
@@ -341,4 +347,22 @@ Started: воскресенье, 15 марта 2026 г. 21:55:12 (EET)
   - `publish_to_all()` wraps each `session.publish()` in try/except to prevent one disconnected session from stopping broadcasts to others
   - For tests with long-lived sessions, use `asyncio.Event` pairs (ready + keep_alive) with hooked message loops to keep sessions open for publish testing, then signal cleanup via `keep_alive.set()`
   - No changes to `__init__.py` were needed since `publish()` and `publish_to_all()` are methods on existing exported classes, not new standalone exports
+---
+
+## 2026-03-15 42:00 (EET) - US-019
+- What was implemented: Client-to-server PubSub — `@wamp.subscribe(topic)` decorator on WampHub registers server-side event handlers; client PUBLISH messages invoke handlers with args/kwargs and session; PUBLISHED acknowledgment when `options.acknowledge = true`; publisher_exclusion (exclude_me) and subscriber_blackwhite_listing (eligible/exclude) options parsed correctly; class-based `@subscribe(topic)` on WampService methods via `register_service()` introspection
+- Files changed:
+  - src/fastapi_headless_wamp/hub.py (added `_server_subscriptions` registry, `subscribe()` decorator, `_handle_publish()` method with handler invocation/acknowledge/options parsing, `_generate_hub_publication_id()`, updated `register_service()` to register `@subscribe`-marked methods, added PUBLISH routing in `_message_loop()`, imported `validate_publish`)
+  - tests/test_hub.py (updated `test_unhandled_message_type_logged_not_crashed` to use PUBLISHED instead of PUBLISH since PUBLISH is now handled)
+  - tests/test_pubsub_server_subscribe.py (new: 27 tests covering decorator registration/multiple handlers, client PUBLISH→handler invocation with args/kwargs/session, no handler no-op, acknowledge mode, sync handler, handler exception resilience, multiple handlers all invoked, one failure doesn't stop others, exclude_me/eligible/exclude options, unique publication IDs, class-based @subscribe with/without prefix/acknowledge/hub access, FastAPI integration for all flows)
+  - .ralph/prd.json (US-019 passes: true)
+  - .ralph/progress.txt (appended progress, updated Codebase Patterns)
+- **Learnings for future iterations:**
+  - `_server_subscriptions` is a `dict[str, list[RpcHandler]]` — multiple handlers per topic, unlike `_server_rpcs` which is one handler per URI
+  - PUBLISHED acknowledgment publication IDs use a hub-level counter (`_next_hub_publication_id`), not per-session, since they are hub-level responses to client PUBLISH requests
+  - For server subscription handlers, `_session` kwarg injection uses the same `inspect.signature()` pattern as `_caller_session_id` / `_progress`
+  - `register_service()` detects `@subscribe`-marked methods via `hasattr(attr, "_subscribe_topic")` and builds full topic URI with prefix, same as for `@rpc`
+  - PUBLISH handling runs inline (not in a task) since subscription handlers are event handlers, not request-response; no CANCEL support needed
+  - The `test_unhandled_message_type_logged_not_crashed` test was updated from PUBLISH to PUBLISHED — the next message type that gets a handler will need to change this again
+  - No changes to service.py needed — the `@subscribe(topic)` decorator was already fully implemented in US-001 scaffolding
 ---
