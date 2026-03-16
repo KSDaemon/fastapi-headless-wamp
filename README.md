@@ -1,12 +1,16 @@
 # fastapi-headless-wamp
 
-Full bidirectional [WAMP](https://wamp-proto.org/) (Web Application Messaging Protocol) RPC and PubSub for [FastAPI](https://fastapi.tiangolo.com/) — **without a separate WAMP router**.
+Full bidirectional [WAMP](https://wamp-proto.org/) (Web Application Messaging Protocol) RPC and PubSub 
+for [FastAPI](https://fastapi.tiangolo.com/) — **without a separate WAMP router**.
 
-Each WebSocket connection gets its own isolated peer-to-peer session between the server and the client. There is no shared broker or dealer infrastructure. This makes the library lightweight, easy to deploy, and ideal for applications that need structured bidirectional communication over WebSockets.
+Each WebSocket connection gets its own isolated peer-to-peer session between the server and the client. 
+There is no shared broker or dealer infrastructure. This makes the library lightweight, easy to deploy, and ideal 
+for applications that need structured bidirectional communication over WebSockets.
 
 ## Features
 
-- **Bidirectional RPC** — register server-side procedures that clients can call, *and* call client-registered procedures from the server.
+- **Bidirectional RPC** — register server-side procedures that clients can call, *and* call client-registered 
+  procedures from the server.
 - **PubSub** — subscribe to topics and publish events in both directions (server-to-client and client-to-server).
 - **Progressive results** — stream intermediate results from long-running RPCs.
 - **Progressive call invocations** — clients can stream input chunks to the server.
@@ -19,17 +23,18 @@ Each WebSocket connection gets its own isolated peer-to-peer session between the
 ## Architecture
 
 ```
-┌──────────────┐  WebSocket  ┌──────────────────────┐
+┌──────────────┐  WebSocket  ┌───────────────────────┐
 │  WAMP Client │◄───────────►│  FastAPI Application  │
 │  (wampy.js)  │  wamp.2.json│                       │
 └──────────────┘             │  WampHub              │
                              │  ├─ session 1 (P2P)   │
 ┌──────────────┐  WebSocket  │  ├─ session 2 (P2P)   │
 │  WAMP Client │◄───────────►│  └─ session N (P2P)   │
-└──────────────┘             └──────────────────────┘
+└──────────────┘             └───────────────────────┘
 ```
 
-Each WebSocket connection creates an **isolated peer-to-peer WAMP session**. There is no shared router — the server and client communicate directly within the session. This means:
+Each WebSocket connection creates an **isolated peer-to-peer WAMP session**. There is no shared router — the server 
+and client communicate directly within the session. This means:
 
 - **No external WAMP router** (like Crossbar.io) is required.
 - Each session is fully independent: client-registered RPCs and subscriptions are scoped to that session.
@@ -67,7 +72,8 @@ Run with `uvicorn`:
 uvicorn myapp:app --host 0.0.0.0 --port 8000
 ```
 
-Clients connect via WebSocket to `ws://localhost:8000/ws` using the `wamp.2.json` subprotocol and can call `com.example.add`.
+Clients connect via WebSocket to `ws://localhost:8000/ws` using the `wamp.2.json` subprotocol and 
+can call `com.example.add`.
 
 ### Class-Based Services
 
@@ -237,7 +243,8 @@ Clients can then connect with the `wamp.2.msgpack` subprotocol.
 
 ## wampy.js Compatibility
 
-This library is designed to be compatible with [wampy.js](https://github.com/nicola/wampy.js) and other standard WAMP clients. The server advertises the following WAMP role features:
+This library is designed to be compatible with [wampy.js](https://github.com/nicola/wampy.js) and other standard WAMP clients. The server 
+advertises the following WAMP role features:
 
 **Dealer features:**
 - `progressive_call_results`
@@ -250,36 +257,34 @@ This library is designed to be compatible with [wampy.js](https://github.com/nic
 - `publisher_exclusion`
 - `subscriber_blackwhite_listing`
 
-**Known limitation:** wampy.js does not handle INTERRUPT messages on the callee side. When the server cancels a call to a client-registered RPC, the client may not abort mid-execution. The server sends CANCEL as a hint but is prepared for a normal YIELD response.
-
 ## API Reference
 
 ### `WampHub(realm="realm1")`
 
 The central hub that manages WAMP sessions. Key methods and decorators:
 
-| Method / Decorator | Description |
-|---|---|
-| `@hub.register(uri)` | Register a server-side RPC handler |
-| `@hub.subscribe(topic)` | Register a server-side subscription handler |
-| `hub.register_service(service)` | Register a `WampService` instance |
-| `@hub.on_session_open` | Callback when a session completes handshake |
-| `@hub.on_session_close` | Callback when a session disconnects |
-| `hub.handle_websocket(ws)` | Full async WebSocket handler |
-| `hub.get_router(path="/ws")` | Get a FastAPI `APIRouter` with the WAMP endpoint |
-| `hub.publish_to_all(topic, ...)` | Publish an event to all subscribed sessions |
-| `hub.sessions` | Dict of active sessions (session_id -> WampSession) |
-| `hub.session_count` | Number of active sessions |
+| Method / Decorator               | Description                                         |
+|----------------------------------|-----------------------------------------------------|
+| `@hub.register(uri)`             | Register a server-side RPC handler                  |
+| `@hub.subscribe(topic)`          | Register a server-side subscription handler         |
+| `hub.register_service(service)`  | Register a `WampService` instance                   |
+| `@hub.on_session_open`           | Callback when a session completes handshake         |
+| `@hub.on_session_close`          | Callback when a session disconnects                 |
+| `hub.handle_websocket(ws)`       | Full async WebSocket handler                        |
+| `hub.get_router(path="/ws")`     | Get a FastAPI `APIRouter` with the WAMP endpoint    |
+| `hub.publish_to_all(topic, ...)` | Publish an event to all subscribed sessions         |
+| `hub.sessions`                   | Dict of active sessions (session_id -> WampSession) |
+| `hub.session_count`              | Number of active sessions                           |
 
 ### `WampSession`
 
 Represents a single WAMP session. Key methods:
 
-| Method | Description |
-|---|---|
-| `session.call(uri, args, kwargs, timeout)` | Call a client-registered RPC |
-| `session.cancel(request_id, mode)` | Cancel a pending call to a client |
-| `session.publish(topic, args, kwargs)` | Publish an event to this client |
+| Method                                     | Description                       |
+|--------------------------------------------|-----------------------------------|
+| `session.call(uri, args, kwargs, timeout)` | Call a client-registered RPC      |
+| `session.cancel(request_id, mode)`         | Cancel a pending call to a client |
+| `session.publish(topic, args, kwargs)`     | Publish an event to this client   |
 
 ### `WampService`
 
@@ -287,17 +292,17 @@ Base class for grouping RPCs with a URI prefix. Use `@rpc()` and `@subscribe()` 
 
 ### Error Classes
 
-| Exception | WAMP Error URI |
-|---|---|
-| `WampError` | (base class) |
-| `WampNoSuchProcedure` | `wamp.error.no_such_procedure` |
-| `WampNoSuchSubscription` | `wamp.error.no_such_subscription` |
-| `WampRuntimeError` | `wamp.error.runtime_error` |
-| `WampCallTimeout` | `wamp.error.canceled` |
-| `WampCanceled` | `wamp.error.canceled` |
+| Exception                    | WAMP Error URI                        |
+|------------------------------|---------------------------------------|
+| `WampError`                  | (base class)                          |
+| `WampNoSuchProcedure`        | `wamp.error.no_such_procedure`        |
+| `WampNoSuchSubscription`     | `wamp.error.no_such_subscription`     |
+| `WampRuntimeError`           | `wamp.error.runtime_error`            |
+| `WampCallTimeout`            | `wamp.error.canceled`                 |
+| `WampCanceled`               | `wamp.error.canceled`                 |
 | `WampProcedureAlreadyExists` | `wamp.error.procedure_already_exists` |
-| `WampProtocolError` | (protocol-level error) |
-| `WampInvalidMessage` | (message validation error) |
+| `WampProtocolError`          | (protocol-level error)                |
+| `WampInvalidMessage`         | (message validation error)            |
 
 ## License
 
