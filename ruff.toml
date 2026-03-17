@@ -1,0 +1,88 @@
+# Ruff configuration file
+# https://docs.astral.sh/ruff/configuration/
+
+# Target line length (matches your current setup)
+line-length = 120
+
+# Python version
+target-version = "py312"
+
+# Exclude directories
+exclude = [
+    ".git",
+    ".ruff_cache",
+    ".venv",
+    "venv",
+    "__pycache__",
+    "build",
+    "dist",
+    "examples",
+]
+
+[format]
+# Formatting options
+indent-style = "space"
+quote-style = "double"
+line-ending = "auto"
+
+# Format code in docstrings
+docstring-code-format = true
+docstring-code-line-length = 80
+
+# Preserve trailing commas for better git diffs
+skip-magic-trailing-comma = false
+
+[lint]
+# Enable specific rule sets
+select = [
+    "E",     # pycodestyle errors
+    "W",     # pycodestyle warnings
+    "F",     # Pyflakes
+    "I",     # isort
+    "N",     # pep8-naming
+    "UP",    # pyupgrade
+    "B",     # flake8-bugbear
+    "C4",    # flake8-comprehensions
+    "COM",   # flake8-commas
+    "T20",   # flake8-print
+    "SIM",   # flake8-simplify
+]
+
+# Rules to ignore
+ignore = [
+    "E501",    # line-too-long (handled by formatter)
+    "COM812",  # missing-trailing-comma (conflicts with formatter)
+    "COM819",  # prohibited-trailing-comma (conflicts with formatter)
+    "T201",    # print statements (we use them for debugging)
+    "B008",    # function-call-in-default-argument (common pattern in FastAPI)
+]
+
+# Allow unused variables when they start with underscore
+dummy-variable-rgx = "^(_+|(_+[a-zA-Z0-9_]*[a-zA-Z0-9]+?))$"
+
+[lint.per-file-ignores]
+# Allow print statements in scripts
+"scripts/*" = ["T20"]
+# Allow print in test files and ignore SIM117 (nested with statements are fine in tests)
+"tests/*" = ["T20", "SIM117"]
+
+[lint.isort]
+section-order = [
+    "future",
+    "standard-library",
+    "third-party",
+    "first-party",
+    "local-folder"
+]
+
+# Force imports to be on separate lines when they're too long
+force-single-line = false
+split-on-trailing-comma = true
+combine-as-imports = false
+
+[lint.mccabe]
+# Maximum cyclomatic complexity
+max-complexity = 15
+
+[lint.pydocstyle]
+convention = "google"
