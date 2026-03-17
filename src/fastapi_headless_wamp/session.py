@@ -15,9 +15,6 @@ from fastapi_headless_wamp.errors import (
     WampError,
     WampNoSuchProcedureError,
 )
-
-# Sentinel value to signal end of progressive input stream
-PROGRESSIVE_INPUT_END = object()
 from fastapi_headless_wamp.protocol import (
     WAMP_ERROR_CLOSE_REALM,
     WAMP_ERROR_GOODBYE_AND_OUT,
@@ -32,6 +29,9 @@ from fastapi_headless_wamp.serializers import (
 )
 
 logger = logging.getLogger(__name__)
+
+# Sentinel value to signal end of progressive input stream
+PROGRESSIVE_INPUT_END = object()
 
 # Type aliases for internal maps
 RpcHandler = Callable[..., Any]
@@ -261,7 +261,7 @@ class WampSession:
         try:
             return await self.receive_message()
         except Exception:
-            raise StopAsyncIteration
+            raise StopAsyncIteration from None
 
     # ------------------------------------------------------------------
     # Session lifecycle
@@ -459,7 +459,9 @@ class WampSession:
             # Clean up the pending call
             self.pending_calls.pop(request_id, None)
             self._pending_progress_callbacks.pop(request_id, None)
-            raise WampCallTimeoutError(f"Call to '{uri}' on session {self.session_id} timed out after {timeout}s")
+            raise WampCallTimeoutError(
+                f"Call to '{uri}' on session {self.session_id} timed out after {timeout}s"
+            ) from None
         finally:
             # Always clean up if still present
             self.pending_calls.pop(request_id, None)

@@ -1,7 +1,7 @@
 """WAMP protocol constants, message types, and validation."""
 
 from enum import IntEnum
-from typing import Any, cast
+from typing import Any
 
 from fastapi_headless_wamp.errors import WampInvalidMessageError
 
@@ -311,7 +311,7 @@ def validate_message(msg: Any) -> None:
     try:
         msg_type = WampMessageType(raw_list[0])
     except ValueError:
-        raise WampInvalidMessageError(f"Unknown WAMP message type code: {raw_list[0]}")
+        raise WampInvalidMessageError(f"Unknown WAMP message type code: {raw_list[0]}") from None
 
     validator = _VALIDATORS.get(msg_type)
     if validator is not None:
