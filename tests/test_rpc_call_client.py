@@ -13,6 +13,7 @@ Covers:
 from __future__ import annotations
 
 import asyncio
+import contextlib
 import json
 from typing import Any
 
@@ -573,10 +574,8 @@ class TestSessionCallTimeout:
             msg = await session.receive_message()
             await hub._handle_register(session, msg)
 
-            try:
+            with contextlib.suppress(WampCallTimeoutError):
                 await session.call("com.example.slow", timeout=0.05)
-            except WampCallTimeoutError:
-                pass
 
             pending_count_after.append(len(session.pending_calls))
 
@@ -636,10 +635,8 @@ class TestSessionCallNoSuchProcedure:
         original_loop = hub._message_loop
 
         async def hooked_loop(session: WampSession) -> None:
-            try:
+            with contextlib.suppress(WampNoSuchProcedureError):
                 await session.call("com.example.unknown")
-            except WampNoSuchProcedureError:
-                pass
 
             ws.enqueue_text(json.dumps(make_goodbye()))
             await original_loop(session)
@@ -670,8 +667,6 @@ class TestSessionCallDisconnect:
 
         call_error: list[Exception] = []
 
-        original_loop = hub._message_loop
-
         async def hooked_loop(session: WampSession) -> None:
             from starlette.websockets import WebSocketDisconnect
 
@@ -684,7 +679,7 @@ class TestSessionCallDisconnect:
                 except WampError as e:
                     call_error.append(e)
 
-            call_task = asyncio.create_task(do_call())
+            asyncio.create_task(do_call())
             await asyncio.sleep(0.01)
 
             # Simulate disconnect by raising WebSocketDisconnect

@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+import contextlib
 import inspect
 import logging
 from collections.abc import Awaitable, Callable
@@ -175,15 +176,8 @@ class WampHub:
             # If the attribute doesn't have _rpc_uri at all, skip it.
             if hasattr(attr, "_rpc_uri"):
                 # Build full URI
-                if rpc_uri is not None:
-                    method_uri = rpc_uri
-                else:
-                    method_uri = attr_name
-
-                if prefix:
-                    full_uri = f"{prefix}.{method_uri}"
-                else:
-                    full_uri = method_uri
+                method_uri = rpc_uri if rpc_uri is not None else attr_name
+                full_uri = f"{prefix}.{method_uri}" if prefix else method_uri
 
                 self._server_rpcs[full_uri] = attr
                 logger.info(
@@ -197,10 +191,7 @@ class WampHub:
             subscribe_topic: str | None = getattr(attr, "_subscribe_topic", None)
             if subscribe_topic is not None:
                 # Build full topic URI with prefix
-                if prefix:
-                    full_topic = f"{prefix}.{subscribe_topic}"
-                else:
-                    full_topic = subscribe_topic
+                full_topic = f"{prefix}.{subscribe_topic}" if prefix else subscribe_topic
 
                 if full_topic not in self._server_subscriptions:
                     self._server_subscriptions[full_topic] = []
@@ -1219,10 +1210,8 @@ class WampHub:
             existing_ids=self._active_session_ids(),
         )
         if not success:
-            try:
+            with contextlib.suppress(Exception):
                 await websocket.close()
-            except Exception:
-                pass
             return
 
         # Register session

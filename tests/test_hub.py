@@ -173,8 +173,6 @@ class TestSessionTracking:
         # closing: let's use a hooked loop that raises WebSocketDisconnect.
         from starlette.websockets import WebSocketDisconnect
 
-        original_loop = hub._message_loop
-
         async def crash_loop(session: WampSession) -> None:
             raise WebSocketDisconnect()
 
@@ -323,8 +321,6 @@ class TestLifecycleCallbacks:
         ws = MockWebSocket(subprotocols=["wamp.2.json"])
         hello: list[Any] = [WampMessageType.HELLO, "realm1", {"roles": {}}]
         ws.enqueue_text(json.dumps(hello))
-
-        original_loop = hub._message_loop
 
         async def crash_loop(session: WampSession) -> None:
             raise WebSocketDisconnect()
@@ -533,9 +529,7 @@ class TestFastAPIIntegration:
 
         with TestClient(app) as client:
             for _ in range(2):
-                with client.websocket_connect(
-                    "/ws", subprotocols=["wamp.2.json"]
-                ) as ws:
+                with client.websocket_connect("/ws", subprotocols=["wamp.2.json"]) as ws:
                     hello: list[Any] = [
                         WampMessageType.HELLO,
                         "realm1",

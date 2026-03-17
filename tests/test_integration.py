@@ -202,9 +202,7 @@ class TestGetRouter:
         app.include_router(hub.get_router(path="/custom"))
 
         with TestClient(app) as client:
-            with client.websocket_connect(
-                "/custom", subprotocols=["wamp.2.json"]
-            ) as ws:
+            with client.websocket_connect("/custom", subprotocols=["wamp.2.json"]) as ws:
                 session_id = do_handshake(ws)
                 assert session_id > 0
                 do_goodbye(ws)
@@ -324,7 +322,7 @@ class TestBothPatterns:
         async def echo(msg: str) -> str:
             return msg
 
-        if pattern == "manual":
+        if pattern == "manual":  # noqa: SIM108
             app = self._manual_app(hub)
         else:
             app = self._router_app(hub)
@@ -357,7 +355,7 @@ class TestBothPatterns:
         """Subscribe to a topic, verify SUBSCRIBED response."""
         hub = WampHub(realm="realm1")
 
-        if pattern == "manual":
+        if pattern == "manual":  # noqa: SIM108
             app = self._manual_app(hub)
         else:
             app = self._router_app(hub)
@@ -389,7 +387,7 @@ class TestBothPatterns:
         """ABORT sent when first message is not HELLO."""
         hub = WampHub(realm="realm1")
 
-        if pattern == "manual":
+        if pattern == "manual":  # noqa: SIM108
             app = self._manual_app(hub)
         else:
             app = self._router_app(hub)
@@ -437,9 +435,7 @@ class TestFullSessionLifecycle:
             return f"Hello, {name}!"
 
         @hub.subscribe("com.example.notifications")
-        async def on_notification(
-            message: str, _session: WampSession | None = None
-        ) -> None:
+        async def on_notification(message: str, _session: WampSession | None = None) -> None:
             events_received.append({"message": message})
 
         app = _make_app(hub)
@@ -562,9 +558,7 @@ class TestBidirectionalRPC:
             async def do_call() -> None:
                 await asyncio.sleep(0.1)
                 try:
-                    result = await session.call(
-                        "com.client.compute", args=[10, 20], timeout=5.0
-                    )
+                    result = await session.call("com.client.compute", args=[10, 20], timeout=5.0)
                     call_results.append(result)
                 except Exception as e:
                     call_errors.append(str(e))
@@ -658,9 +652,7 @@ class TestBidirectionalRPC:
             async def do_call() -> None:
                 await asyncio.sleep(0.15)
                 try:
-                    result = await session.call(
-                        "com.client.subtract", args=[50, 20], timeout=5.0
-                    )
+                    result = await session.call("com.client.subtract", args=[50, 20], timeout=5.0)
                     server_call_results.append(result)
                 except Exception as e:
                     server_call_results.append(f"error: {e}")
@@ -982,9 +974,7 @@ class TestMultipleConcurrentConnections:
             with client.websocket_connect("/ws", subprotocols=["wamp.2.json"]) as ws1:
                 sid1 = do_handshake(ws1)
 
-                with client.websocket_connect(
-                    "/ws", subprotocols=["wamp.2.json"]
-                ) as ws2:
+                with client.websocket_connect("/ws", subprotocols=["wamp.2.json"]) as ws2:
                     sid2 = do_handshake(ws2)
 
                     # Both should have unique session IDs
@@ -1046,9 +1036,7 @@ class TestMultipleConcurrentConnections:
                 assert subscribed1[0] == WampMessageType.SUBSCRIBED
                 sub_id_1 = subscribed1[2]
 
-                with client.websocket_connect(
-                    "/ws", subprotocols=["wamp.2.json"]
-                ) as ws2:
+                with client.websocket_connect("/ws", subprotocols=["wamp.2.json"]) as ws2:
                     do_handshake(ws2)
 
                     # Client 2 subscribes to same topic
@@ -1113,9 +1101,7 @@ class TestMultipleConcurrentConnections:
                 assert registered1[0] == WampMessageType.REGISTERED
                 reg_id_1 = registered1[2]
 
-                with client.websocket_connect(
-                    "/ws", subprotocols=["wamp.2.json"]
-                ) as ws2:
+                with client.websocket_connect("/ws", subprotocols=["wamp.2.json"]) as ws2:
                     do_handshake(ws2)
 
                     # Client 2 registers the same procedure name — no conflict

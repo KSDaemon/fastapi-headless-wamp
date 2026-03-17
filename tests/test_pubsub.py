@@ -161,9 +161,7 @@ class TestSubscribe:
             if session.subscriptions:
                 sub_id = list(session.subscriptions.keys())[0]
                 sub_topic.append(session.subscriptions[sub_id])
-                sub_reverse.append(
-                    session.subscription_uris.get("com.example.topic", -1)
-                )
+                sub_reverse.append(session.subscription_uris.get("com.example.topic", -1))
 
             # Now process goodbye
             goodbye: list[Any] = [WampMessageType.GOODBYE, {}, "wamp.close.normal"]
@@ -429,7 +427,7 @@ class TestSubscriptionIsolation:
         hub = WampHub(realm="realm1")
         sessions_data: list[dict[str, Any]] = []
 
-        for i in range(2):
+        for _ in range(2):
             ws = MockWebSocket(subprotocols=["wamp.2.json"])
             hello: list[Any] = [WampMessageType.HELLO, "realm1", {"roles": {}}]
             subscribe: list[Any] = [
@@ -565,8 +563,6 @@ class TestSubscriptionCleanup:
         subscribe: list[Any] = [WampMessageType.SUBSCRIBE, 1, {}, "com.example.topic"]
         ws.enqueue_text(json.dumps(hello))
         ws.enqueue_text(json.dumps(subscribe))
-
-        original_loop = hub._message_loop  # type: ignore[attr-defined]
 
         async def hooked_loop(session: WampSession) -> None:
             # Process subscribe first

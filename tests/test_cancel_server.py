@@ -11,6 +11,7 @@ Covers:
 from __future__ import annotations
 
 import asyncio
+import contextlib
 import json
 from typing import Any
 
@@ -167,10 +168,8 @@ class TestCancelSendsMessage:
 
             # Start a call
             async def do_call() -> None:
-                try:
+                with contextlib.suppress(Exception):
                     await session.call("com.example.slow")
-                except Exception:
-                    pass
 
             call_task = asyncio.create_task(do_call())
             await asyncio.sleep(0.01)
@@ -228,10 +227,8 @@ class TestCancelSendsMessage:
             await hub._handle_register(session, msg)
 
             async def do_call() -> None:
-                try:
+                with contextlib.suppress(Exception):
                     await session.call("com.example.slow")
-                except Exception:
-                    pass
 
             call_task = asyncio.create_task(do_call())
             await asyncio.sleep(0.01)
@@ -286,11 +283,7 @@ class TestCancelSendsMessage:
         await hub.handle_websocket(ws)  # type: ignore[arg-type]
 
         # Only WELCOME + GOODBYE reply — no CANCEL sent
-        cancel_msgs = [
-            json.loads(t)
-            for t in ws.sent_texts
-            if json.loads(t)[0] == WampMessageType.CANCEL
-        ]
+        cancel_msgs = [json.loads(t) for t in ws.sent_texts if json.loads(t)[0] == WampMessageType.CANCEL]
         assert len(cancel_msgs) == 0
 
 
@@ -701,7 +694,7 @@ class TestCancelServerFastAPI:
                     await asyncio.sleep(0.01)
 
                 try:
-                    result = await session.call("com.client.slow", args=[42])
+                    await session.call("com.client.slow", args=[42])
                 except WampCanceledError as e:
                     call_error.append(e)
                 except Exception as e:
@@ -771,9 +764,7 @@ class TestCancelServerFastAPI:
                     await asyncio.sleep(0.01)
 
                 # Call and immediately cancel
-                call_task = asyncio.create_task(
-                    session.call("com.client.stubborn", args=[1, 2])
-                )
+                call_task = asyncio.create_task(session.call("com.client.stubborn", args=[1, 2]))
                 # Small delay to ensure INVOCATION is sent before CANCEL
                 await asyncio.sleep(0.05)
 

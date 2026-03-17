@@ -577,8 +577,6 @@ class TestCleanupOnDisconnect:
 
         session_ref: list[WampSession] = []
 
-        original_loop = hub._message_loop
-
         async def hooked_loop(session: WampSession) -> None:
             # Process two REGISTERs
             msg1 = await session.receive_message()

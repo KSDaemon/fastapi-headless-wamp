@@ -15,6 +15,7 @@ Covers:
 from __future__ import annotations
 
 import asyncio
+import contextlib
 import json
 from typing import Any
 
@@ -163,21 +164,15 @@ class TestProgressiveYieldCallback:
             assert invocation[3].get("receive_progress") is True
 
             # Client sends progressive YIELDs
-            ws.enqueue_text(
-                json.dumps(make_yield_msg(inv_request_id, ["chunk1"], progress=True))
-            )
+            ws.enqueue_text(json.dumps(make_yield_msg(inv_request_id, ["chunk1"], progress=True)))
             yield1 = await session.receive_message()
             await hub._handle_yield(session, yield1)
 
-            ws.enqueue_text(
-                json.dumps(make_yield_msg(inv_request_id, ["chunk2"], progress=True))
-            )
+            ws.enqueue_text(json.dumps(make_yield_msg(inv_request_id, ["chunk2"], progress=True)))
             yield2 = await session.receive_message()
             await hub._handle_yield(session, yield2)
 
-            ws.enqueue_text(
-                json.dumps(make_yield_msg(inv_request_id, ["chunk3"], progress=True))
-            )
+            ws.enqueue_text(json.dumps(make_yield_msg(inv_request_id, ["chunk3"], progress=True)))
             yield3 = await session.receive_message()
             await hub._handle_yield(session, yield3)
 
@@ -233,9 +228,7 @@ class TestProgressiveYieldCallback:
             inv_request_id = invocation[1]
 
             # One progressive yield
-            ws.enqueue_text(
-                json.dumps(make_yield_msg(inv_request_id, [42], progress=True))
-            )
+            ws.enqueue_text(json.dumps(make_yield_msg(inv_request_id, [42], progress=True)))
             yield1 = await session.receive_message()
             await hub._handle_yield(session, yield1)
 
@@ -353,18 +346,12 @@ class TestFinalYieldResolves:
             inv_request_id = invocation[1]
 
             # Progressive
-            ws.enqueue_text(
-                json.dumps(make_yield_msg(inv_request_id, ["p1"], progress=True))
-            )
+            ws.enqueue_text(json.dumps(make_yield_msg(inv_request_id, ["p1"], progress=True)))
             y1 = await session.receive_message()
             await hub._handle_yield(session, y1)
 
             # Final YIELD with complex data
-            ws.enqueue_text(
-                json.dumps(
-                    make_yield_msg(inv_request_id, [{"status": "complete", "count": 3}])
-                )
-            )
+            ws.enqueue_text(json.dumps(make_yield_msg(inv_request_id, [{"status": "complete", "count": 3}])))
             y_final = await session.receive_message()
             await hub._handle_yield(session, y_final)
 
@@ -495,15 +482,11 @@ class TestNoCallbackCase:
             inv_request_id = invocation[1]
 
             # Send progressive yields — should be silently consumed
-            ws.enqueue_text(
-                json.dumps(make_yield_msg(inv_request_id, ["chunk1"], progress=True))
-            )
+            ws.enqueue_text(json.dumps(make_yield_msg(inv_request_id, ["chunk1"], progress=True)))
             y1 = await session.receive_message()
             await hub._handle_yield(session, y1)
 
-            ws.enqueue_text(
-                json.dumps(make_yield_msg(inv_request_id, ["chunk2"], progress=True))
-            )
+            ws.enqueue_text(json.dumps(make_yield_msg(inv_request_id, ["chunk2"], progress=True)))
             y2 = await session.receive_message()
             await hub._handle_yield(session, y2)
 
@@ -551,9 +534,8 @@ class TestProgressCallbackCleanup:
             msg = await session.receive_message()
             await hub._handle_register(session, msg)
 
-            result = None
-            try:
-                result = await asyncio.wait_for(
+            with contextlib.suppress(Exception):
+                await asyncio.wait_for(
                     session.call(
                         "com.example.stream",
                         receive_progress=True,
@@ -561,8 +543,6 @@ class TestProgressCallbackCleanup:
                     ),
                     timeout=2.0,
                 )
-            except Exception:
-                pass
 
             # Check that progress callbacks map is empty after call
             progress_cb_count_after.append(len(session._pending_progress_callbacks))
@@ -626,15 +606,13 @@ class TestProgressCallbackCleanup:
             msg = await session.receive_message()
             await hub._handle_register(session, msg)
 
-            try:
+            with contextlib.suppress(WampCallTimeoutError):
                 await session.call(
                     "com.example.slow",
                     receive_progress=True,
                     on_progress=on_progress,
                     timeout=0.05,
                 )
-            except WampCallTimeoutError:
-                pass
 
             progress_cb_count_after.append(len(session._pending_progress_callbacks))
 
@@ -695,15 +673,9 @@ class TestProgressiveViaDispatchLoop:
             inv_request_id = invocation[1]
 
             # Enqueue progressive + final YIELDs and GOODBYE for dispatch
-            ws.enqueue_text(
-                json.dumps(make_yield_msg(inv_request_id, ["p1"], progress=True))
-            )
-            ws.enqueue_text(
-                json.dumps(make_yield_msg(inv_request_id, ["p2"], progress=True))
-            )
-            ws.enqueue_text(
-                json.dumps(make_yield_msg(inv_request_id, ["final_result"]))
-            )
+            ws.enqueue_text(json.dumps(make_yield_msg(inv_request_id, ["p1"], progress=True)))
+            ws.enqueue_text(json.dumps(make_yield_msg(inv_request_id, ["p2"], progress=True)))
+            ws.enqueue_text(json.dumps(make_yield_msg(inv_request_id, ["final_result"])))
             ws.enqueue_text(json.dumps(make_goodbye()))
 
             # Run the original loop to dispatch everything
@@ -787,12 +759,8 @@ class TestFastAPIIntegrationProgressive:
                 assert invocation[3].get("receive_progress") is True
 
                 # Client sends progressive YIELDs
-                ws.send_json(
-                    make_yield_msg(inv_request_id, ["progress_1"], progress=True)
-                )
-                ws.send_json(
-                    make_yield_msg(inv_request_id, ["progress_2"], progress=True)
-                )
+                ws.send_json(make_yield_msg(inv_request_id, ["progress_1"], progress=True))
+                ws.send_json(make_yield_msg(inv_request_id, ["progress_2"], progress=True))
 
                 # Final YIELD
                 ws.send_json(make_yield_msg(inv_request_id, ["all_done"]))
