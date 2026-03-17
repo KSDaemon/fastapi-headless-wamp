@@ -33,14 +33,14 @@ test-cov:
 	@echo "Running tests with coverage..."
 	@uv run pytest -n auto --cov --cov-report=lcov
 	@echo "Generating HTML coverage report..."
-	@genhtml coverage.lcov -o coverage-html --ignore-errors inconsistent,corrupt,category,count
+	@genhtml coverage.lcov -o htmlcov --ignore-errors inconsistent,corrupt,category,count
 	@rm -f coverage.lcov
-	@echo "Coverage report generated in coverage-html/"
+	@echo "Coverage report generated in htmlcov/"
 	@if command -v open >/dev/null 2>&1; then \
 		echo "Opening coverage report in browser..."; \
-		open coverage-html/index.html; \
+		open htmlcov/index.html; \
 	else \
-		echo "Open coverage-html/index.html in your browser to view the report"; \
+		echo "Open htmlcov/index.html in your browser to view the report"; \
 	fi
 
 test-e2e:
