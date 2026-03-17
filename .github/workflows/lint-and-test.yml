@@ -1,0 +1,154 @@
+name: Lint and Test
+
+on:
+  push:
+    paths:
+      - 'src/**'
+      - 'tests/**'
+    branches:
+      - main
+  pull_request:
+    paths:
+      - 'src/**'
+      - 'tests/**'
+
+permissions:
+  contents: read
+  pull-requests: write
+  checks: write
+  actions: read
+
+jobs:
+  lint:
+    runs-on: ubuntu-latest
+
+    strategy:
+      matrix:
+        python-version: ["3.12", "3.14"]
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Python ${{ matrix.python-version }}
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v4
+        with:
+          version: "latest"
+
+      - name: Install dependencies
+        run: uv sync
+
+      - name: Run lint
+        run: make lint
+
+      - name: Run all tests with coverage
+        run: |
+          uv run pytest -n auto tests/ \
+            --cov=src \
+            --cov-report=xml \
+            --cov-report=html \
+            --cov-report=json \
+            --cov-report=term
+
+      # On push to main: save coverage artifact for future PR comparisons
+      - name: Upload main branch coverage
+        if: github.ref == 'refs/heads/main' && matrix.python-version == '3.12'
+        uses: actions/upload-artifact@v4
+        with:
+          name: coverage-main
+          path: coverage.json
+          retention-days: 90
+
+      # On PR: download cached main coverage instead of re-running tests
+      - name: Rename branch coverage
+        if: github.event_name == 'pull_request' && matrix.python-version == '3.12'
+        run: cp coverage.json coverage-branch.json
+
+      - name: Download main branch coverage
+        if: github.event_name == 'pull_request' && matrix.python-version == '3.12'
+        uses: dawidd6/action-download-artifact@v6
+        with:
+          name: coverage-main
+          workflow: lint-and-test.yml
+          branch: main
+          event: push
+          path: /tmp/main-coverage
+          if_no_artifact_found: warn
+        continue-on-error: true
+
+      - name: Prepare main coverage file
+        if: github.event_name == 'pull_request' && matrix.python-version == '3.12'
+        run: |
+          if [ -f /tmp/main-coverage/coverage.json ]; then
+            cp /tmp/main-coverage/coverage.json coverage-main.json
+          else
+            echo "::warning::Main branch coverage not found. Report will show 0% for main."
+            echo '{"files": {}, "totals": {}}' > coverage-main.json
+          fi
+
+      - name: Compare coverage and post PR comment
+        if: github.event_name == 'pull_request' && matrix.python-version == '3.12'
+        uses: actions/github-script@v7
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          script: |
+            const { execSync } = require('child_process');
+
+            let report;
+            let coverageDropped = false;
+            try {
+              report = execSync('uv run python scripts/compare_coverage.py', {
+                encoding: 'utf-8',
+                stdio: ['pipe', 'pipe', 'pipe']
+              });
+            } catch (error) {
+              // Exit code 2 = coverage regression detected
+              if (error.status === 2) {
+                coverageDropped = true;
+                report = error.stdout;
+              } else {
+                console.error('Error running compare_coverage.py:', error.message);
+                console.error('Stderr:', error.stderr);
+                console.error('Stdout:', error.stdout);
+                report = '⚠️ Failed to generate coverage comparison report.';
+              }
+            }
+
+            const comments = await github.rest.issues.listComments({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: context.issue.number,
+            });
+
+            const botComment = comments.data.find(comment =>
+              comment.user.type === 'Bot' &&
+              comment.body.includes('📊 Code Coverage Diff')
+            );
+
+            const commentBody = report + '\n\n---\n*Updated automatically by GitHub Actions*';
+
+            if (botComment) {
+              await github.rest.issues.updateComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                comment_id: botComment.id,
+                body: commentBody
+              });
+            } else {
+              await github.rest.issues.createComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: context.issue.number,
+                body: commentBody
+              });
+            }
+
+            // Fail the job after posting the comment so the author sees the report
+            if (coverageDropped) {
+              core.setFailed('Code coverage dropped beyond the allowed threshold (1%). Please add tests for the changed code.');
+            }
