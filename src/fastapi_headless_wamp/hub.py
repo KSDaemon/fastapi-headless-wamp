@@ -46,24 +46,16 @@ logger = logging.getLogger(__name__)
 SessionCallback = Callable[[WampSession], Awaitable[None]]
 
 
-def _session_callback_list() -> list[SessionCallback]:
-    return []
-
-
-def _rpc_registry() -> dict[str, RpcHandler]:
-    return {}
-
-
 class WampHub:
     """Central hub that manages WAMP sessions and routes messages."""
 
     def __init__(self, realm: str) -> None:
         self.realm = realm
         self._sessions: dict[int, WampSession] = {}
-        self._server_rpcs: dict[str, RpcHandler] = _rpc_registry()
+        self._server_rpcs: dict[str, RpcHandler] = {}
         self._server_subscriptions: dict[str, list[RpcHandler]] = {}
-        self._on_session_open_callbacks: list[SessionCallback] = _session_callback_list()  # XXX Why?
-        self._on_session_close_callbacks: list[SessionCallback] = _session_callback_list()  # XXX Why?
+        self._on_session_open_callbacks: list[SessionCallback] = []
+        self._on_session_close_callbacks: list[SessionCallback] = []
         # Counter for generating unique registration IDs
         self._next_registration_id: int = 0
         # Counter for generating unique subscription IDs
@@ -244,16 +236,16 @@ class WampHub:
         for cb in self._on_session_open_callbacks:
             try:
                 await cb(session)
-            except Exception as exc:  # XXX Use logger.exception?
-                logger.error("on_session_open callback error: %s", exc, exc_info=True)
+            except Exception:
+                logger.exception("on_session_open callback error")
 
     async def _fire_session_close(self, session: WampSession) -> None:
         """Invoke all on_session_close callbacks."""
         for cb in self._on_session_close_callbacks:
             try:
                 await cb(session)
-            except Exception as exc:
-                logger.error("on_session_close callback error: %s", exc, exc_info=True)
+            except Exception:
+                logger.exception("on_session_close callback error")
 
     # ------------------------------------------------------------------
     # FastAPI router integration
@@ -783,7 +775,7 @@ class WampHub:
 
     def _generate_registration_id(self) -> int:
         """Generate a unique registration ID for a client RPC registration."""
-        self._next_registration_id += 1  # XXX: What about overflow?
+        self._next_registration_id += 1
         return self._next_registration_id
 
     async def _handle_register(self, session: WampSession, msg: list[Any]) -> None:
@@ -876,7 +868,7 @@ class WampHub:
 
     def _generate_subscription_id(self) -> int:
         """Generate a unique subscription ID for a client subscription."""
-        self._next_subscription_id += 1  # XXX: What about overflow?
+        self._next_subscription_id += 1
         return self._next_subscription_id
 
     async def _handle_subscribe(self, session: WampSession, msg: list[Any]) -> None:
@@ -968,7 +960,7 @@ class WampHub:
 
     def _generate_hub_publication_id(self) -> int:
         """Generate a unique hub-level publication ID for PUBLISHED acknowledgments."""
-        self._next_hub_publication_id += 1  # XXX: What about overflow?
+        self._next_hub_publication_id += 1
         return self._next_hub_publication_id
 
     async def _handle_publish(self, session: WampSession, msg: list[Any]) -> None:

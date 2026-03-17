@@ -6,7 +6,8 @@ import asyncio
 import logging
 import random
 from collections.abc import AsyncIterator, Awaitable, Callable
-from typing import Any
+from types import MappingProxyType
+from typing import Any, Final
 
 from starlette.websockets import WebSocket, WebSocketDisconnect
 
@@ -37,21 +38,23 @@ PROGRESSIVE_INPUT_END = object()
 RpcHandler = Callable[..., Any]
 ProgressCallback = Callable[[Any], Awaitable[None]]
 
-# XXX: Mark as const?
-# WAMP role features advertised by the server
-DEALER_FEATURES: dict[str, bool] = {
-    "progressive_call_results": True,
-    "call_canceling": True,
-    "caller_identification": True,
-    "call_timeout": True,
-}
+# WAMP role features advertised by the server (immutable)
+DEALER_FEATURES: Final = MappingProxyType(
+    {
+        "progressive_call_results": True,
+        "call_canceling": True,
+        "caller_identification": True,
+        "call_timeout": True,
+    }
+)
 
-# XXX: Mark as const?
-BROKER_FEATURES: dict[str, bool] = {
-    "publisher_identification": True,
-    "publisher_exclusion": True,
-    "subscriber_blackwhite_listing": True,
-}
+BROKER_FEATURES: Final = MappingProxyType(
+    {
+        "publisher_identification": True,
+        "publisher_exclusion": True,
+        "subscriber_blackwhite_listing": True,
+    }
+)
 
 
 # Typed default factories for pyright strict mode
@@ -122,7 +125,6 @@ class ProgressiveCallInput:
         return args, kwargs
 
 
-# XXX: Move to protocol?
 def negotiate_subprotocol(
     requested_subprotocols: list[str],
 ) -> tuple[str, Serializer] | None:
@@ -349,8 +351,8 @@ class WampSession:
         # Send WELCOME
         welcome_details: dict[str, Any] = {
             "roles": {
-                "dealer": {"features": DEALER_FEATURES},
-                "broker": {"features": BROKER_FEATURES},
+                "dealer": {"features": dict(DEALER_FEATURES)},
+                "broker": {"features": dict(BROKER_FEATURES)},
             }
         }
         welcome_msg: list[Any] = [
@@ -521,7 +523,7 @@ class WampSession:
 
     def _next_publication_id(self) -> int:
         """Generate the next unique publication ID for this session."""
-        self._publication_id_counter += 1  # XXX: What about overflow?
+        self._publication_id_counter += 1
         return self._publication_id_counter
 
     async def publish(
