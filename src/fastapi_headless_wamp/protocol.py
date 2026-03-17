@@ -310,7 +310,7 @@ def validate_message(msg: Any) -> None:
     if not isinstance(msg, list):
         raise WampInvalidMessage("WAMP message must be a non-empty list")
 
-    raw_list = cast(list[Any], msg)
+    raw_list = msg
     if len(raw_list) == 0:
         raise WampInvalidMessage("WAMP message must be a non-empty list")
 
