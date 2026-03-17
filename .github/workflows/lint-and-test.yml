@@ -5,12 +5,16 @@ on:
     paths:
       - 'src/**'
       - 'tests/**'
+      - 'pyproject.toml'
+      - 'ruff.toml'
     branches:
       - main
   pull_request:
     paths:
       - 'src/**'
       - 'tests/**'
+      - 'pyproject.toml'
+      - 'ruff.toml'
 
 permissions:
   contents: read

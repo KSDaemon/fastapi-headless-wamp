@@ -17,7 +17,7 @@ for applications that need structured bidirectional communication over WebSocket
 - **Call cancellation** — cancel in-flight RPCs from either side.
 - **Class-based services** — group related RPCs and subscriptions into service classes with a URI prefix.
 - **Pluggable serialization** — JSON by default, extensible to other formats.
-- **Typed** — fully typed with pyright strict mode.
+- **Typed** — fully typed with strict linting via ruff.
 - **wampy.js compatible** — designed to work with [wampy.js](https://github.com/nicola/wampy.js) and other WAMP clients.
 
 ## Architecture

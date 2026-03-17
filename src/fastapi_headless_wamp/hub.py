@@ -271,7 +271,7 @@ class WampHub:
         hub = self
 
         @router.websocket(path)
-        async def _wamp_websocket(websocket: WebSocket) -> None:  # pyright: ignore[reportUnusedFunction]
+        async def _wamp_websocket(websocket: WebSocket) -> None:
             await hub.handle_websocket(websocket)
 
         return router

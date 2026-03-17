@@ -26,19 +26,6 @@ WampKwargs = dict[str, Any]
 
 
 # ---------------------------------------------------------------------------
-# Typed default factories for pyright strict mode
-# ---------------------------------------------------------------------------
-
-
-def _dict_factory() -> dict[str, Any]:
-    return {}
-
-
-def _list_factory() -> list[Any]:
-    return []
-
-
-# ---------------------------------------------------------------------------
 # Message dataclasses
 # ---------------------------------------------------------------------------
 
@@ -48,7 +35,7 @@ class HelloMessage:
     """HELLO [1, Realm|uri, Details|dict]."""
 
     realm: str
-    details: dict[str, Any] = field(default_factory=_dict_factory)
+    details: dict[str, Any] = field(default_factory=dict)
 
     def to_list(self) -> WampMessage:
         return [WampMessageType.HELLO, self.realm, self.details]
@@ -59,7 +46,7 @@ class WelcomeMessage:
     """WELCOME [2, Session|id, Details|dict]."""
 
     session: int
-    details: dict[str, Any] = field(default_factory=_dict_factory)
+    details: dict[str, Any] = field(default_factory=dict)
 
     def to_list(self) -> WampMessage:
         return [WampMessageType.WELCOME, self.session, self.details]
@@ -95,8 +82,8 @@ class ErrorMessage:
     request_id: int
     details: dict[str, Any]
     error: str
-    arguments: WampArgs = field(default_factory=_list_factory)
-    arguments_kw: WampKwargs = field(default_factory=_dict_factory)
+    arguments: WampArgs = field(default_factory=list)
+    arguments_kw: WampKwargs = field(default_factory=dict)
 
     def to_list(self) -> WampMessage:
         msg: WampMessage = [
@@ -120,8 +107,8 @@ class PublishMessage:
     request_id: int
     options: dict[str, Any]
     topic: str
-    arguments: WampArgs = field(default_factory=_list_factory)
-    arguments_kw: WampKwargs = field(default_factory=_dict_factory)
+    arguments: WampArgs = field(default_factory=list)
+    arguments_kw: WampKwargs = field(default_factory=dict)
 
     def to_list(self) -> WampMessage:
         msg: WampMessage = [
@@ -198,9 +185,9 @@ class EventMessage:
 
     subscription_id: int
     publication_id: int
-    details: dict[str, Any] = field(default_factory=_dict_factory)
-    arguments: WampArgs = field(default_factory=_list_factory)
-    arguments_kw: WampKwargs = field(default_factory=_dict_factory)
+    details: dict[str, Any] = field(default_factory=dict)
+    arguments: WampArgs = field(default_factory=list)
+    arguments_kw: WampKwargs = field(default_factory=dict)
 
     def to_list(self) -> WampMessage:
         msg: WampMessage = [
@@ -223,8 +210,8 @@ class CallMessage:
     request_id: int
     options: dict[str, Any]
     procedure: str
-    arguments: WampArgs = field(default_factory=_list_factory)
-    arguments_kw: WampKwargs = field(default_factory=_dict_factory)
+    arguments: WampArgs = field(default_factory=list)
+    arguments_kw: WampKwargs = field(default_factory=dict)
 
     def to_list(self) -> WampMessage:
         msg: WampMessage = [
@@ -245,7 +232,7 @@ class CancelMessage:
     """CANCEL [49, CALL.Request|id, Options|dict]."""
 
     request_id: int
-    options: dict[str, Any] = field(default_factory=_dict_factory)
+    options: dict[str, Any] = field(default_factory=dict)
 
     def to_list(self) -> WampMessage:
         return [WampMessageType.CANCEL, self.request_id, self.options]
@@ -256,9 +243,9 @@ class ResultMessage:
     """RESULT [50, CALL.Request|id, Details|dict, YIELD.Arguments|list?, YIELD.ArgumentsKw|dict?]."""
 
     request_id: int
-    details: dict[str, Any] = field(default_factory=_dict_factory)
-    arguments: WampArgs = field(default_factory=_list_factory)
-    arguments_kw: WampKwargs = field(default_factory=_dict_factory)
+    details: dict[str, Any] = field(default_factory=dict)
+    arguments: WampArgs = field(default_factory=list)
+    arguments_kw: WampKwargs = field(default_factory=dict)
 
     def to_list(self) -> WampMessage:
         msg: WampMessage = [WampMessageType.RESULT, self.request_id, self.details]
@@ -319,9 +306,9 @@ class InvocationMessage:
 
     request_id: int
     registration_id: int
-    details: dict[str, Any] = field(default_factory=_dict_factory)
-    arguments: WampArgs = field(default_factory=_list_factory)
-    arguments_kw: WampKwargs = field(default_factory=_dict_factory)
+    details: dict[str, Any] = field(default_factory=dict)
+    arguments: WampArgs = field(default_factory=list)
+    arguments_kw: WampKwargs = field(default_factory=dict)
 
     def to_list(self) -> WampMessage:
         msg: WampMessage = [
@@ -342,7 +329,7 @@ class InterruptMessage:
     """INTERRUPT [69, INVOCATION.Request|id, Options|dict]."""
 
     request_id: int
-    options: dict[str, Any] = field(default_factory=_dict_factory)
+    options: dict[str, Any] = field(default_factory=dict)
 
     def to_list(self) -> WampMessage:
         return [WampMessageType.INTERRUPT, self.request_id, self.options]
@@ -353,9 +340,9 @@ class YieldMessage:
     """YIELD [70, INVOCATION.Request|id, Options|dict, Arguments|list?, ArgumentsKw|dict?]."""
 
     request_id: int
-    options: dict[str, Any] = field(default_factory=_dict_factory)
-    arguments: WampArgs = field(default_factory=_list_factory)
-    arguments_kw: WampKwargs = field(default_factory=_dict_factory)
+    options: dict[str, Any] = field(default_factory=dict)
+    arguments: WampArgs = field(default_factory=list)
+    arguments_kw: WampKwargs = field(default_factory=dict)
 
     def to_list(self) -> WampMessage:
         msg: WampMessage = [WampMessageType.YIELD, self.request_id, self.options]

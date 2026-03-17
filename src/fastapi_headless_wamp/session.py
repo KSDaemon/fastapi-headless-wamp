@@ -57,39 +57,6 @@ BROKER_FEATURES: Final = MappingProxyType(
 )
 
 
-# Typed default factories for pyright strict mode
-def _str_handler_dict() -> dict[str, RpcHandler]:
-    return {}
-
-
-def _int_str_dict() -> dict[int, str]:
-    return {}
-
-
-def _str_int_dict() -> dict[str, int]:
-    return {}
-
-
-def _int_future_dict() -> dict[int, asyncio.Future[Any]]:
-    return {}
-
-
-def _int_sub_dict() -> dict[int, str]:
-    return {}
-
-
-def _int_progress_dict() -> dict[int, ProgressCallback]:
-    return {}
-
-
-def _int_queue_dict() -> dict[int, asyncio.Queue[Any]]:
-    return {}
-
-
-def _int_task_dict() -> dict[int, asyncio.Task[Any]]:
-    return {}
-
-
 class ProgressiveCallInput:
     """Async iterator over progressive CALL input chunks.
 
@@ -164,35 +131,35 @@ class WampSession:
 
         # Server-side RPCs registered on this session's hub (uri -> handler)
         # (populated by WampHub, not managed here)
-        self.server_rpcs: dict[str, RpcHandler] = _str_handler_dict()
+        self.server_rpcs: dict[str, RpcHandler] = {}
 
         # Client-registered RPCs: registration_id -> procedure URI
-        self.client_rpcs: dict[int, str] = _int_str_dict()
+        self.client_rpcs: dict[int, str] = {}
         # Reverse lookup: procedure URI -> registration_id
-        self.client_rpc_uris: dict[str, int] = _str_int_dict()
+        self.client_rpc_uris: dict[str, int] = {}
 
         # Client subscriptions: subscription_id -> topic URI
-        self.subscriptions: dict[int, str] = _int_sub_dict()
+        self.subscriptions: dict[int, str] = {}
         # Reverse lookup: topic URI -> subscription_id
-        self.subscription_uris: dict[str, int] = _str_int_dict()
+        self.subscription_uris: dict[str, int] = {}
 
         # Server-side subscription handlers (topic -> handler)
-        self.server_subscriptions: dict[str, RpcHandler] = _str_handler_dict()
+        self.server_subscriptions: dict[str, RpcHandler] = {}
 
         # Pending calls TO client: request_id -> Future
-        self.pending_calls: dict[int, asyncio.Future[Any]] = _int_future_dict()
+        self.pending_calls: dict[int, asyncio.Future[Any]] = {}
 
         # Progress callbacks for pending calls: request_id -> on_progress callback
-        self._pending_progress_callbacks: dict[int, ProgressCallback] = _int_progress_dict()
+        self._pending_progress_callbacks: dict[int, ProgressCallback] = {}
 
         # Progressive call input state: request_id -> queue for incoming chunks
-        self._progressive_input_queues: dict[int, asyncio.Queue[Any]] = _int_queue_dict()
+        self._progressive_input_queues: dict[int, asyncio.Queue[Any]] = {}
         # Tasks for progressive call handlers: request_id -> running handler task
-        self._progressive_input_tasks: dict[int, asyncio.Task[Any]] = _int_task_dict()
+        self._progressive_input_tasks: dict[int, asyncio.Task[Any]] = {}
 
         # Running handler tasks for client CALLs: request_id -> task
         # Used by CANCEL to cancel in-flight handlers
-        self._running_call_tasks: dict[int, asyncio.Task[Any]] = _int_task_dict()
+        self._running_call_tasks: dict[int, asyncio.Task[Any]] = {}
 
         # Request IDs where ERROR was already sent by CANCEL handler
         # (skip/killnowait modes); handler should suppress RESULT/ERROR
