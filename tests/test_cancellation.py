@@ -191,11 +191,7 @@ class TestCancelKillMode:
         await asyncio.wait_for(task, timeout=2.0)
 
         # Verify ERROR was sent
-        error_msgs = [
-            json.loads(t)
-            for t in ws.sent_texts
-            if json.loads(t)[0] == WampMessageType.ERROR
-        ]
+        error_msgs = [json.loads(t) for t in ws.sent_texts if json.loads(t)[0] == WampMessageType.ERROR]
         assert len(error_msgs) == 1
         assert error_msgs[0][4] == WAMP_ERROR_CANCELED
 
@@ -241,16 +237,8 @@ class TestCancelAfterCompletion:
         await asyncio.wait_for(task, timeout=2.0)
 
         # Only a RESULT should have been sent (no ERROR)
-        result_msgs = [
-            json.loads(t)
-            for t in ws.sent_texts
-            if json.loads(t)[0] == WampMessageType.RESULT
-        ]
-        error_msgs = [
-            json.loads(t)
-            for t in ws.sent_texts
-            if json.loads(t)[0] == WampMessageType.ERROR
-        ]
+        result_msgs = [json.loads(t) for t in ws.sent_texts if json.loads(t)[0] == WampMessageType.RESULT]
+        error_msgs = [json.loads(t) for t in ws.sent_texts if json.loads(t)[0] == WampMessageType.ERROR]
 
         assert len(result_msgs) == 1
         assert result_msgs[0][1] == 1  # request_id
@@ -279,11 +267,7 @@ class TestCancelAfterCompletion:
         await asyncio.wait_for(task, timeout=2.0)
 
         # No ERROR sent (only WELCOME + GOODBYE reply)
-        error_msgs = [
-            json.loads(t)
-            for t in ws.sent_texts
-            if json.loads(t)[0] == WampMessageType.ERROR
-        ]
+        error_msgs = [json.loads(t) for t in ws.sent_texts if json.loads(t)[0] == WampMessageType.ERROR]
         assert len(error_msgs) == 0
 
 
@@ -326,11 +310,7 @@ class TestCancelSkipMode:
         await asyncio.sleep(0.05)
 
         # ERROR should be sent immediately
-        error_msgs = [
-            json.loads(t)
-            for t in ws.sent_texts
-            if json.loads(t)[0] == WampMessageType.ERROR
-        ]
+        error_msgs = [json.loads(t) for t in ws.sent_texts if json.loads(t)[0] == WampMessageType.ERROR]
         assert len(error_msgs) == 1
         assert error_msgs[0][4] == WAMP_ERROR_CANCELED
 
@@ -346,16 +326,8 @@ class TestCancelSkipMode:
         await asyncio.wait_for(task, timeout=2.0)
 
         # Only 1 ERROR, no RESULT
-        result_msgs = [
-            json.loads(t)
-            for t in ws.sent_texts
-            if json.loads(t)[0] == WampMessageType.RESULT
-        ]
-        all_error_msgs = [
-            json.loads(t)
-            for t in ws.sent_texts
-            if json.loads(t)[0] == WampMessageType.ERROR
-        ]
+        result_msgs = [json.loads(t) for t in ws.sent_texts if json.loads(t)[0] == WampMessageType.RESULT]
+        all_error_msgs = [json.loads(t) for t in ws.sent_texts if json.loads(t)[0] == WampMessageType.ERROR]
         assert len(result_msgs) == 0
         assert len(all_error_msgs) == 1
 
@@ -392,11 +364,7 @@ class TestCancelKillNoWaitMode:
         await asyncio.sleep(0.1)
 
         # ERROR should have been sent
-        error_msgs = [
-            json.loads(t)
-            for t in ws.sent_texts
-            if json.loads(t)[0] == WampMessageType.ERROR
-        ]
+        error_msgs = [json.loads(t) for t in ws.sent_texts if json.loads(t)[0] == WampMessageType.ERROR]
         assert len(error_msgs) == 1
         assert error_msgs[0][4] == WAMP_ERROR_CANCELED
         assert error_msgs[0][2] == 1  # request_id
@@ -406,11 +374,7 @@ class TestCancelKillNoWaitMode:
         await asyncio.wait_for(task, timeout=2.0)
 
         # No duplicate ERROR (the task's CancelledError should be suppressed)
-        all_error_msgs = [
-            json.loads(t)
-            for t in ws.sent_texts
-            if json.loads(t)[0] == WampMessageType.ERROR
-        ]
+        all_error_msgs = [json.loads(t) for t in ws.sent_texts if json.loads(t)[0] == WampMessageType.ERROR]
         assert len(all_error_msgs) == 1
 
     async def test_killnowait_no_duplicate_error(self) -> None:
@@ -446,11 +410,7 @@ class TestCancelKillNoWaitMode:
         await asyncio.wait_for(task, timeout=2.0)
 
         # Count all ERROR messages — should be exactly 1
-        all_error_msgs = [
-            json.loads(t)
-            for t in ws.sent_texts
-            if json.loads(t)[0] == WampMessageType.ERROR
-        ]
+        all_error_msgs = [json.loads(t) for t in ws.sent_texts if json.loads(t)[0] == WampMessageType.ERROR]
         assert len(all_error_msgs) == 1
 
 
@@ -562,11 +522,7 @@ class TestCancelEdgeCases:
         await asyncio.sleep(0.1)
 
         # ERROR should be sent
-        error_msgs = [
-            json.loads(t)
-            for t in ws.sent_texts
-            if json.loads(t)[0] == WampMessageType.ERROR
-        ]
+        error_msgs = [json.loads(t) for t in ws.sent_texts if json.loads(t)[0] == WampMessageType.ERROR]
         assert len(error_msgs) >= 1
         assert error_msgs[0][4] == WAMP_ERROR_CANCELED
 
@@ -621,16 +577,8 @@ class TestCancelEdgeCases:
         await asyncio.wait_for(task, timeout=2.0)
 
         # Check: RESULT for request 2 and ERROR for request 1
-        result_msgs = [
-            json.loads(t)
-            for t in ws.sent_texts
-            if json.loads(t)[0] == WampMessageType.RESULT
-        ]
-        error_msgs = [
-            json.loads(t)
-            for t in ws.sent_texts
-            if json.loads(t)[0] == WampMessageType.ERROR
-        ]
+        result_msgs = [json.loads(t) for t in ws.sent_texts if json.loads(t)[0] == WampMessageType.RESULT]
+        error_msgs = [json.loads(t) for t in ws.sent_texts if json.loads(t)[0] == WampMessageType.ERROR]
 
         # Fast handler should have RESULT
         assert any(m[1] == 2 and m[3] == ["fast done"] for m in result_msgs)
@@ -660,11 +608,7 @@ class TestCancelEdgeCases:
         await asyncio.wait_for(task, timeout=2.0)
 
         # No ERROR sent for invalid CANCEL
-        error_msgs = [
-            json.loads(t)
-            for t in ws.sent_texts
-            if json.loads(t)[0] == WampMessageType.ERROR
-        ]
+        error_msgs = [json.loads(t) for t in ws.sent_texts if json.loads(t)[0] == WampMessageType.ERROR]
         assert len(error_msgs) == 0
 
     async def test_cancel_request_id_matching(self) -> None:
@@ -699,10 +643,6 @@ class TestCancelEdgeCases:
         ws.enqueue_text(json.dumps(goodbye))
         await asyncio.wait_for(task, timeout=2.0)
 
-        error_msgs = [
-            json.loads(t)
-            for t in ws.sent_texts
-            if json.loads(t)[0] == WampMessageType.ERROR
-        ]
+        error_msgs = [json.loads(t) for t in ws.sent_texts if json.loads(t)[0] == WampMessageType.ERROR]
         assert len(error_msgs) == 1
         assert error_msgs[0][2] == 42  # request_id matches

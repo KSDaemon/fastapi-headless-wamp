@@ -250,7 +250,7 @@ class TestGoodbyeFlow:
         assert reply[2] == WAMP_ERROR_GOODBYE_AND_OUT
 
     async def test_goodbye_closes_session(self) -> None:
-        session, ws = make_session()
+        session, _ws = make_session()
         session.session_id = 42
         session.is_open = True
 
@@ -368,7 +368,7 @@ class TestHandshakeDisconnect:
 
     async def test_handshake_fails_on_receive_error(self) -> None:
         """If receive_message raises an exception, handshake fails."""
-        session, ws = make_session()
+        session, _ws = make_session()
         session.receive_message = AsyncMock(  # type: ignore[method-assign]
             side_effect=Exception("connection closed")
         )

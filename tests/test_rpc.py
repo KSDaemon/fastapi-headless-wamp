@@ -784,11 +784,7 @@ class TestCallHandlerUnit:
         assert len(ws.sent_texts) == 3
 
         # Find the RESULT message regardless of position
-        result_msgs = [
-            json.loads(t)
-            for t in ws.sent_texts
-            if json.loads(t)[0] == WampMessageType.RESULT
-        ]
+        result_msgs = [json.loads(t) for t in ws.sent_texts if json.loads(t)[0] == WampMessageType.RESULT]
         assert len(result_msgs) == 1
         result = result_msgs[0]
         assert result[0] == WampMessageType.RESULT

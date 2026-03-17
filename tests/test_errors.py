@@ -154,9 +154,7 @@ class TestPayload:
         assert err.wamp_kwargs == {"a": "b"}
 
     def test_subclass_inherits_payload(self) -> None:
-        err = WampRuntimeError(
-            "handler failed", args=["trace info"], kwargs={"code": 500}
-        )
+        err = WampRuntimeError("handler failed", args=["trace info"], kwargs={"code": 500})
         assert err.wamp_args == ["trace info"]
         assert err.wamp_kwargs == {"code": 500}
 

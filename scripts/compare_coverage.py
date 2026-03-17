@@ -5,7 +5,6 @@ Generates a Markdown report showing coverage differences.
 """
 
 import json
-import os
 import sys
 from pathlib import Path
 
@@ -77,12 +76,13 @@ def load_coverage(path: str) -> tuple[dict[str, float], dict[str, dict[str, int]
         - folder_percentages: dict mapping folder name to coverage percentage
         - folder_stats: dict mapping folder name to {"covered": int, "total": int}
     """
-    if not os.path.exists(path):
+    coverage_path = Path(path)
+    if not coverage_path.exists():
         print(f"Warning: Coverage file {path} not found", file=sys.stderr)
         return {}, {}
 
     try:
-        with open(path) as f:
+        with coverage_path.open() as f:
             data = json.load(f)
     except json.JSONDecodeError as e:
         print(f"Error: Failed to parse {path}: {e}", file=sys.stderr)
@@ -151,10 +151,9 @@ def format_diff(diff: float) -> str:
     """Format diff with appropriate sign and emoji."""
     if diff > 0:
         return f"🟢 +{diff:.1f}%"
-    elif diff < 0:
+    if diff < 0:
         return f"🔴 {diff:.1f}%"
-    else:
-        return f"⚪ {diff:.1f}%"
+    return f"⚪ {diff:.1f}%"
 
 
 def main() -> int:

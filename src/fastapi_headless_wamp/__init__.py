@@ -28,28 +28,24 @@ from fastapi_headless_wamp.session import ProgressiveCallInput, WampSession
 logging.getLogger("fastapi_headless_wamp").addHandler(logging.NullHandler())
 
 __all__ = [
-    # Core classes
-    "WampHub",
-    "WampSession",
-    "WampService",
-    "ProgressiveCallInput",
-    # Decorators
-    "rpc",
-    "subscribe",
-    # Serializers
-    "Serializer",
     "JsonSerializer",
-    "register_serializer",
-    "get_serializer",
-    "get_available_subprotocols",
-    # Errors
+    "ProgressiveCallInput",
+    "Serializer",
+    "WampCallTimeoutError",
+    "WampCanceledError",
     "WampError",
-    "WampProtocolError",
+    "WampHub",
     "WampInvalidMessageError",
     "WampNoSuchProcedureError",
     "WampNoSuchSubscriptionError",
-    "WampRuntimeError",
-    "WampCallTimeoutError",
-    "WampCanceledError",
     "WampProcedureAlreadyExistsError",
+    "WampProtocolError",
+    "WampRuntimeError",
+    "WampService",
+    "WampSession",
+    "get_available_subprotocols",
+    "get_serializer",
+    "register_serializer",
+    "rpc",
+    "subscribe",
 ]

@@ -1,13 +1,9 @@
 # Ruff configuration file
 # https://docs.astral.sh/ruff/configuration/
 
-# Target line length (matches your current setup)
 line-length = 120
-
-# Python version
 target-version = "py312"
 
-# Exclude directories
 exclude = [
     ".git",
     ".ruff_cache",
@@ -20,20 +16,14 @@ exclude = [
 ]
 
 [format]
-# Formatting options
 indent-style = "space"
 quote-style = "double"
 line-ending = "auto"
-
-# Format code in docstrings
 docstring-code-format = true
 docstring-code-line-length = 80
-
-# Preserve trailing commas for better git diffs
 skip-magic-trailing-comma = false
 
 [lint]
-# Enable specific rule sets
 select = [
     "E",     # pycodestyle errors
     "W",     # pycodestyle warnings
@@ -46,25 +36,61 @@ select = [
     "COM",   # flake8-commas
     "T20",   # flake8-print
     "SIM",   # flake8-simplify
+    "A",     # flake8-builtins
+    "ANN",   # flake8-annotations
+    "ARG",   # flake8-unused-arguments
+    "FBT",   # flake8-boolean-trap
+    "ISC",   # flake8-implicit-str-concat
+    "PIE",   # flake8-pie
+    "PT",    # flake8-pytest-style
+    "PTH",   # flake8-use-pathlib
+    "RET",   # flake8-return
+    "RSE",   # flake8-raise
+    "RUF",   # Ruff-specific rules
+    "S",     # flake8-bandit (security)
+    "TCH",   # flake8-type-checking
+    "TID",   # flake8-tidy-imports
+    "PERF",  # perflint
+    "PL",    # pylint
 ]
 
-# Rules to ignore
 ignore = [
-    "E501",    # line-too-long (handled by formatter)
-    "COM812",  # missing-trailing-comma (conflicts with formatter)
-    "COM819",  # prohibited-trailing-comma (conflicts with formatter)
-    "T201",    # print statements (we use them for debugging)
-    "B008",    # function-call-in-default-argument (common pattern in FastAPI)
+    "E501",      # line-too-long (handled by formatter)
+    "COM812",    # missing-trailing-comma (conflicts with formatter)
+    "COM819",    # prohibited-trailing-comma (conflicts with formatter)
+    "ISC001",    # single-line-implicit-string-concatenation (conflicts with formatter)
+    "T201",      # print statements (we use them in logging/debugging)
+    "B008",      # function-call-in-default-argument (common FastAPI pattern)
+    "ANN401",    # any-type (WAMP protocol requires Any for dynamic message payloads)
+    "PLR2004",   # magic-value-comparison (WAMP protocol codes are inherently magic numbers)
+    "PLR0913",   # too-many-arguments (WAMP messages have many fields by spec)
+    "S311",      # suspicious-non-cryptographic-random-usage (session IDs don't need crypto random)
 ]
 
 # Allow unused variables when they start with underscore
 dummy-variable-rgx = "^(_+|(_+[a-zA-Z0-9_]*[a-zA-Z0-9]+?))$"
 
 [lint.per-file-ignores]
-# Allow print statements in scripts
-"scripts/*" = ["T20"]
-# Allow print in test files and ignore SIM117 (nested with statements are fine in tests)
-"tests/*" = ["T20", "SIM117"]
+"scripts/*" = ["T20", "PLR0912"]
+"src/fastapi_headless_wamp/hub.py" = ["PLR0911", "PLR0912", "PLR0915"]  # complex WAMP message dispatch
+"src/fastapi_headless_wamp/types.py" = ["PLC0415"]  # circular import workaround (fixed in step 4)
+"src/fastapi_headless_wamp/session.py" = ["FBT001", "FBT002"]  # receive_progress keyword arg is fine
+"tests/*" = [
+    "T20",       # print statements
+    "SIM117",    # nested with statements
+    "S101",      # assert (expected in tests)
+    "ARG001",    # unused function arguments (test callbacks)
+    "ARG002",    # unused method arguments (test callbacks)
+    "PT017",     # pytest-assert-in-except (common test pattern)
+    "PLR0912",   # too-many-branches (complex test setups)
+    "PLR0915",   # too-many-statements (complex test setups)
+    "PLC0415",   # import-outside-top-level (will be fixed separately)
+    "RUF006",    # asyncio-dangling-task (intentional in tests)
+    "TC001",     # typing-only imports (test runtime needs them)
+    "TC003",     # typing-only imports (test runtime needs them)
+    "FBT001",    # boolean-type-hint-positional-argument (test helpers)
+    "FBT002",    # boolean-default-value-positional-argument (test helpers)
+]
 
 [lint.isort]
 section-order = [
@@ -72,16 +98,13 @@ section-order = [
     "standard-library",
     "third-party",
     "first-party",
-    "local-folder"
+    "local-folder",
 ]
-
-# Force imports to be on separate lines when they're too long
 force-single-line = false
 split-on-trailing-comma = true
 combine-as-imports = false
 
 [lint.mccabe]
-# Maximum cyclomatic complexity
 max-complexity = 15
 
 [lint.pydocstyle]

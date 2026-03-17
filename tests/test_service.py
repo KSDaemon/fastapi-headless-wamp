@@ -429,9 +429,7 @@ class TestServiceInvocation:
                 _do_handshake(ws)
 
                 # add
-                ws.send_json(
-                    [WampMessageType.CALL, 1, {}, "com.example.math.add", [1, 2]]
-                )
+                ws.send_json([WampMessageType.CALL, 1, {}, "com.example.math.add", [1, 2]])
                 r1: list[Any] = ws.receive_json()
                 assert r1[0] == WampMessageType.RESULT
                 assert r1[3] == [3]

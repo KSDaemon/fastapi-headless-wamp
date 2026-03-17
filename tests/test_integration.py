@@ -52,7 +52,8 @@ def do_handshake(ws: Any, realm: str = "realm1") -> int:
     ws.send_json(hello)
     welcome: list[Any] = ws.receive_json()
     assert welcome[0] == WampMessageType.WELCOME
-    assert isinstance(welcome[1], int) and welcome[1] > 0
+    assert isinstance(welcome[1], int)
+    assert welcome[1] > 0
     return int(welcome[1])
 
 

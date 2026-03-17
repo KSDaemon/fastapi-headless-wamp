@@ -181,12 +181,12 @@ class TestRegister:
         task = asyncio.create_task(hub.handle_websocket(ws))  # type: ignore[arg-type]
         await entered_loop.wait()
 
-        session = list(hub.sessions.values())[0]
+        session = next(iter(hub.sessions.values()))
 
         # Verify maps are populated
         assert len(session.client_rpcs) == 1
         assert len(session.client_rpc_uris) == 1
-        reg_id = list(session.client_rpcs.keys())[0]
+        reg_id = next(iter(session.client_rpcs.keys()))
         assert session.client_rpcs[reg_id] == "com.example.ping"
         assert session.client_rpc_uris["com.example.ping"] == reg_id
 
@@ -588,7 +588,7 @@ class TestCleanupOnDisconnect:
             registered_event.set()
 
             # Simulate disconnect
-            raise WebSocketDisconnect()
+            raise WebSocketDisconnect
 
         hub._message_loop = hooked_loop  # type: ignore[method-assign]
 

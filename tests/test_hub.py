@@ -138,7 +138,7 @@ class TestSessionTracking:
 
         # Session should be tracked
         assert hub.session_count == 1
-        session = list(hub.sessions.values())[0]
+        session = next(iter(hub.sessions.values()))
         assert session.is_open is True
 
         release_loop.set()
@@ -174,7 +174,7 @@ class TestSessionTracking:
         from starlette.websockets import WebSocketDisconnect
 
         async def crash_loop(session: WampSession) -> None:
-            raise WebSocketDisconnect()
+            raise WebSocketDisconnect
 
         hub._message_loop = crash_loop  # type: ignore[method-assign]
 
@@ -323,7 +323,7 @@ class TestLifecycleCallbacks:
         ws.enqueue_text(json.dumps(hello))
 
         async def crash_loop(session: WampSession) -> None:
-            raise WebSocketDisconnect()
+            raise WebSocketDisconnect
 
         hub._message_loop = crash_loop  # type: ignore[method-assign]
 

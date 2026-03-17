@@ -159,7 +159,7 @@ class TestSubscribe:
             # Capture subscription state before cleanup
             sub_count.append(len(session.subscriptions))
             if session.subscriptions:
-                sub_id = list(session.subscriptions.keys())[0]
+                sub_id = next(iter(session.subscriptions.keys()))
                 sub_topic.append(session.subscriptions[sub_id])
                 sub_reverse.append(session.subscription_uris.get("com.example.topic", -1))
 
@@ -321,7 +321,7 @@ class TestUnsubscribe:
 
             # Verify it's in the maps
             assert len(session.subscriptions) == 1
-            sub_id = list(session.subscriptions.keys())[0]
+            sub_id = next(iter(session.subscriptions.keys()))
 
             # Now unsubscribe
             unsub: list[Any] = [WampMessageType.UNSUBSCRIBE, 2, sub_id]
@@ -573,7 +573,7 @@ class TestSubscriptionCleanup:
             assert len(session.subscriptions) == 1
 
             # Simulate disconnect
-            raise WebSocketDisconnect()
+            raise WebSocketDisconnect
 
         hub._message_loop = hooked_loop  # type: ignore[method-assign]
 

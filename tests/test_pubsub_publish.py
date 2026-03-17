@@ -102,9 +102,7 @@ def find_all_msgs_by_type(ws: MockWebSocket, msg_type: int) -> list[list[Any]]:
 # ---------------------------------------------------------------------------
 
 
-async def make_subscribed_session(
-    hub: WampHub, topics: list[str]
-) -> tuple[MockWebSocket, WampSession]:
+async def make_subscribed_session(hub: WampHub, topics: list[str]) -> tuple[MockWebSocket, WampSession]:
     """Create a hub session that is subscribed to the given topics.
 
     Returns ``(mock_websocket, session)`` where the session has completed

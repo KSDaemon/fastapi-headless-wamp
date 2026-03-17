@@ -683,7 +683,7 @@ class TestSessionCallDisconnect:
             await asyncio.sleep(0.01)
 
             # Simulate disconnect by raising WebSocketDisconnect
-            raise WebSocketDisconnect()
+            raise WebSocketDisconnect
 
         hub._message_loop = hooked_loop  # type: ignore[method-assign]
 

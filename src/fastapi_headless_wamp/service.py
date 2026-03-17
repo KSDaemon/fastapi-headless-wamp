@@ -3,10 +3,11 @@
 from __future__ import annotations
 
 import logging
-from collections.abc import Callable
 from typing import TYPE_CHECKING, Any
 
 if TYPE_CHECKING:
+    from collections.abc import Callable
+
     from fastapi_headless_wamp.hub import WampHub
 
 logger = logging.getLogger(__name__)
@@ -20,6 +21,7 @@ def rpc(uri: str | None = None) -> Callable[..., Any]:
         @rpc("my_procedure")
         async def my_handler(self, x: int) -> int:
             return x * 2
+
 
         @rpc()  # URI inferred from method name
         async def another_handler(self) -> str:
@@ -65,6 +67,7 @@ class WampService:
             @rpc("multiply")
             async def mul(self, a: int, b: int) -> int:
                 return a * b
+
 
         hub = WampHub()
         hub.register_service(MathService())

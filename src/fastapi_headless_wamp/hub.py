@@ -7,7 +7,7 @@ import contextlib
 import inspect
 import logging
 from collections.abc import Awaitable, Callable
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 from fastapi import APIRouter
 from starlette.websockets import WebSocket, WebSocketDisconnect
@@ -29,7 +29,6 @@ from fastapi_headless_wamp.protocol import (
     validate_unsubscribe,
     validate_yield,
 )
-from fastapi_headless_wamp.service import WampService
 from fastapi_headless_wamp.session import (
     PROGRESSIVE_INPUT_END,
     ProgressiveCallInput,
@@ -37,6 +36,9 @@ from fastapi_headless_wamp.session import (
     WampSession,
     negotiate_subprotocol,
 )
+
+if TYPE_CHECKING:
+    from fastapi_headless_wamp.service import WampService
 
 logger = logging.getLogger(__name__)
 
@@ -361,7 +363,7 @@ class WampHub:
             # Also track as a running call task for CANCEL support
             session.store_running_call_task(request_id, task)
 
-            def _on_prog_task_done(t: asyncio.Task[Any]) -> None:
+            def _on_prog_task_done(_t: asyncio.Task[Any]) -> None:
                 session.remove_running_call_task(request_id)
 
             task.add_done_callback(_on_prog_task_done)
@@ -391,7 +393,7 @@ class WampHub:
         session.store_running_call_task(request_id, task)
 
         # Add callback to clean up the task tracking when done
-        def _on_task_done(t: asyncio.Task[Any]) -> None:
+        def _on_task_done(_t: asyncio.Task[Any]) -> None:
             session.remove_running_call_task(request_id)
 
         task.add_done_callback(_on_task_done)
@@ -1001,9 +1003,9 @@ class WampHub:
 
         # Why is this needed?
         # Parse options (trivial in peer-to-peer, but we parse them correctly)
-        _exclude_me = options.get("exclude_me", True)  # noqa: F841 — parsed for correctness
-        _eligible = options.get("eligible")  # noqa: F841 — parsed for correctness
-        _exclude = options.get("exclude")  # noqa: F841 — parsed for correctness
+        _exclude_me = options.get("exclude_me", True)
+        _eligible = options.get("eligible")
+        _exclude = options.get("exclude")
 
         # Look up server-side subscription handlers for this topic
         handlers = self._server_subscriptions.get(topic)
@@ -1283,7 +1285,7 @@ class WampHub:
             if msg_type == WampMessageType.GOODBYE:
                 await session.handle_goodbye(msg)
                 break
-            elif msg_type == WampMessageType.CALL:
+            if msg_type == WampMessageType.CALL:
                 await self._handle_call(session, msg)
             elif msg_type == WampMessageType.CANCEL:
                 await self._handle_cancel(session, msg)

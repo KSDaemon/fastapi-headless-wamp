@@ -148,9 +148,7 @@ class TestWampErrorUris:
         assert WAMP_ERROR_NO_SUCH_SUBSCRIPTION == "wamp.error.no_such_subscription"
 
     def test_procedure_already_exists(self) -> None:
-        assert (
-            WAMP_ERROR_PROCEDURE_ALREADY_EXISTS == "wamp.error.procedure_already_exists"
-        )
+        assert WAMP_ERROR_PROCEDURE_ALREADY_EXISTS == "wamp.error.procedure_already_exists"
 
     def test_canceled(self) -> None:
         assert WAMP_ERROR_CANCELED == "wamp.error.canceled"
@@ -189,9 +187,7 @@ class TestValidateValidMessages:
         validate_error([WampMessageType.ERROR, 48, 1, {}, "wamp.error.runtime_error"])
 
     def test_error_with_args(self) -> None:
-        validate_error(
-            [WampMessageType.ERROR, 48, 1, {}, "wamp.error.runtime_error", ["arg1"]]
-        )
+        validate_error([WampMessageType.ERROR, 48, 1, {}, "wamp.error.runtime_error", ["arg1"]])
 
     def test_error_with_args_kwargs(self) -> None:
         validate_error(
@@ -210,9 +206,7 @@ class TestValidateValidMessages:
         validate_publish([WampMessageType.PUBLISH, 1, {}, "com.example.topic"])
 
     def test_publish_with_args(self) -> None:
-        validate_publish(
-            [WampMessageType.PUBLISH, 1, {}, "com.example.topic", ["hello"]]
-        )
+        validate_publish([WampMessageType.PUBLISH, 1, {}, "com.example.topic", ["hello"]])
 
     def test_publish_with_args_kwargs(self) -> None:
         validate_publish(
@@ -257,9 +251,7 @@ class TestValidateValidMessages:
         validate_call([WampMessageType.CALL, 1, {}, "com.example.add", [1, 2]])
 
     def test_call_with_args_kwargs(self) -> None:
-        validate_call(
-            [WampMessageType.CALL, 1, {}, "com.example.add", [1, 2], {"key": "val"}]
-        )
+        validate_call([WampMessageType.CALL, 1, {}, "com.example.add", [1, 2], {"key": "val"}])
 
     def test_cancel(self) -> None:
         validate_cancel([WampMessageType.CANCEL, 1, {}])
@@ -292,9 +284,7 @@ class TestValidateValidMessages:
         validate_invocation([WampMessageType.INVOCATION, 1, 300, {}, [1, 2]])
 
     def test_invocation_with_args_kwargs(self) -> None:
-        validate_invocation(
-            [WampMessageType.INVOCATION, 1, 300, {}, [1, 2], {"key": "val"}]
-        )
+        validate_invocation([WampMessageType.INVOCATION, 1, 300, {}, [1, 2], {"key": "val"}])
 
     def test_interrupt(self) -> None:
         validate_interrupt([WampMessageType.INTERRUPT, 1, {}])
@@ -487,9 +477,7 @@ class TestMessageDataclasses:
         assert result == [WampMessageType.CALL, 1, {}, "com.example.add"]
 
     def test_call_to_list_with_args(self) -> None:
-        msg = CallMessage(
-            request_id=1, options={}, procedure="com.example.add", arguments=[1, 2]
-        )
+        msg = CallMessage(request_id=1, options={}, procedure="com.example.add", arguments=[1, 2])
         result = msg.to_list()
         assert result == [WampMessageType.CALL, 1, {}, "com.example.add", [1, 2]]
 

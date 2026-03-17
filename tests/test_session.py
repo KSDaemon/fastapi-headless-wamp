@@ -242,9 +242,7 @@ class TestAsyncIterator:
             side_effect=Exception("connection closed")
         )
 
-        messages: list[list[Any]] = []
-        async for msg in session:
-            messages.append(msg)
+        messages: list[list[Any]] = [msg async for msg in session]
 
         assert messages == []
 
