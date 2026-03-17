@@ -2,7 +2,7 @@
 
 import pytest
 
-from fastapi_headless_wamp.errors import WampInvalidMessage
+from fastapi_headless_wamp.errors import WampInvalidMessageError
 from fastapi_headless_wamp.protocol import (
     WAMP_ERROR_CANCELED,
     WAMP_ERROR_CLOSE_REALM,
@@ -315,42 +315,42 @@ class TestValidateValidMessages:
 
 
 class TestValidateInvalidMessages:
-    """Test that invalid WAMP messages raise WampInvalidMessage."""
+    """Test that invalid WAMP messages raise WampInvalidMessageError."""
 
     def test_hello_too_short(self) -> None:
-        with pytest.raises(WampInvalidMessage):
+        with pytest.raises(WampInvalidMessageError):
             validate_hello([WampMessageType.HELLO, "realm1"])
 
     def test_hello_realm_not_string(self) -> None:
-        with pytest.raises(WampInvalidMessage):
+        with pytest.raises(WampInvalidMessageError):
             validate_hello([WampMessageType.HELLO, 123, {}])
 
     def test_hello_details_not_dict(self) -> None:
-        with pytest.raises(WampInvalidMessage):
+        with pytest.raises(WampInvalidMessageError):
             validate_hello([WampMessageType.HELLO, "realm1", "not_a_dict"])
 
     def test_welcome_too_short(self) -> None:
-        with pytest.raises(WampInvalidMessage):
+        with pytest.raises(WampInvalidMessageError):
             validate_welcome([WampMessageType.WELCOME, 12345])
 
     def test_welcome_session_not_int(self) -> None:
-        with pytest.raises(WampInvalidMessage):
+        with pytest.raises(WampInvalidMessageError):
             validate_welcome([WampMessageType.WELCOME, "not_int", {}])
 
     def test_abort_details_not_dict(self) -> None:
-        with pytest.raises(WampInvalidMessage):
+        with pytest.raises(WampInvalidMessageError):
             validate_abort([WampMessageType.ABORT, "not_dict", "reason"])
 
     def test_goodbye_too_short(self) -> None:
-        with pytest.raises(WampInvalidMessage):
+        with pytest.raises(WampInvalidMessageError):
             validate_goodbye([WampMessageType.GOODBYE, {}])
 
     def test_error_too_short(self) -> None:
-        with pytest.raises(WampInvalidMessage):
+        with pytest.raises(WampInvalidMessageError):
             validate_error([WampMessageType.ERROR, 48, 1, {}])
 
     def test_error_args_not_list(self) -> None:
-        with pytest.raises(WampInvalidMessage):
+        with pytest.raises(WampInvalidMessageError):
             validate_error(
                 [
                     WampMessageType.ERROR,
@@ -363,7 +363,7 @@ class TestValidateInvalidMessages:
             )
 
     def test_error_kwargs_not_dict(self) -> None:
-        with pytest.raises(WampInvalidMessage):
+        with pytest.raises(WampInvalidMessageError):
             validate_error(
                 [
                     WampMessageType.ERROR,
@@ -377,43 +377,43 @@ class TestValidateInvalidMessages:
             )
 
     def test_publish_too_short(self) -> None:
-        with pytest.raises(WampInvalidMessage):
+        with pytest.raises(WampInvalidMessageError):
             validate_publish([WampMessageType.PUBLISH, 1, {}])
 
     def test_publish_topic_not_string(self) -> None:
-        with pytest.raises(WampInvalidMessage):
+        with pytest.raises(WampInvalidMessageError):
             validate_publish([WampMessageType.PUBLISH, 1, {}, 42])
 
     def test_subscribe_too_short(self) -> None:
-        with pytest.raises(WampInvalidMessage):
+        with pytest.raises(WampInvalidMessageError):
             validate_subscribe([WampMessageType.SUBSCRIBE, 1, {}])
 
     def test_call_procedure_not_string(self) -> None:
-        with pytest.raises(WampInvalidMessage):
+        with pytest.raises(WampInvalidMessageError):
             validate_call([WampMessageType.CALL, 1, {}, 42])
 
     def test_cancel_too_short(self) -> None:
-        with pytest.raises(WampInvalidMessage):
+        with pytest.raises(WampInvalidMessageError):
             validate_cancel([WampMessageType.CANCEL, 1])
 
     def test_result_request_id_not_int(self) -> None:
-        with pytest.raises(WampInvalidMessage):
+        with pytest.raises(WampInvalidMessageError):
             validate_result([WampMessageType.RESULT, "not_int", {}])
 
     def test_register_too_short(self) -> None:
-        with pytest.raises(WampInvalidMessage):
+        with pytest.raises(WampInvalidMessageError):
             validate_register([WampMessageType.REGISTER, 1, {}])
 
     def test_invocation_too_short(self) -> None:
-        with pytest.raises(WampInvalidMessage):
+        with pytest.raises(WampInvalidMessageError):
             validate_invocation([WampMessageType.INVOCATION, 1, 300])
 
     def test_yield_request_id_not_int(self) -> None:
-        with pytest.raises(WampInvalidMessage):
+        with pytest.raises(WampInvalidMessageError):
             validate_yield([WampMessageType.YIELD, "not_int", {}])
 
     def test_interrupt_too_short(self) -> None:
-        with pytest.raises(WampInvalidMessage):
+        with pytest.raises(WampInvalidMessageError):
             validate_interrupt([WampMessageType.INTERRUPT, 1])
 
 
@@ -426,15 +426,15 @@ class TestValidateMessageDispatch:
     """Test the top-level validate_message dispatcher."""
 
     def test_not_a_list(self) -> None:
-        with pytest.raises(WampInvalidMessage, match="non-empty list"):
+        with pytest.raises(WampInvalidMessageError, match="non-empty list"):
             validate_message("not a list")  # type: ignore[arg-type]
 
     def test_empty_list(self) -> None:
-        with pytest.raises(WampInvalidMessage, match="non-empty list"):
+        with pytest.raises(WampInvalidMessageError, match="non-empty list"):
             validate_message([])
 
     def test_unknown_type_code(self) -> None:
-        with pytest.raises(WampInvalidMessage, match="Unknown WAMP message type code"):
+        with pytest.raises(WampInvalidMessageError, match="Unknown WAMP message type code"):
             validate_message([999, "something"])
 
     def test_dispatches_to_hello_validator(self) -> None:
@@ -447,7 +447,7 @@ class TestValidateMessageDispatch:
 
     def test_dispatches_to_hello_validator_invalid(self) -> None:
         # Invalid hello -> error from hello validator
-        with pytest.raises(WampInvalidMessage):
+        with pytest.raises(WampInvalidMessageError):
             validate_message([WampMessageType.HELLO, 123, {}])
 
     def test_dispatches_to_result_validator(self) -> None:

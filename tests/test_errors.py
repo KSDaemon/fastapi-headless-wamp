@@ -3,13 +3,13 @@
 import pytest
 
 from fastapi_headless_wamp.errors import (
-    WampCallTimeout,
-    WampCanceled,
+    WampCallTimeoutError,
+    WampCanceledError,
     WampError,
-    WampInvalidMessage,
-    WampNoSuchProcedure,
-    WampNoSuchSubscription,
-    WampProcedureAlreadyExists,
+    WampInvalidMessageError,
+    WampNoSuchProcedureError,
+    WampNoSuchSubscriptionError,
+    WampProcedureAlreadyExistsError,
     WampProtocolError,
     WampRuntimeError,
 )
@@ -27,13 +27,13 @@ class TestErrorHierarchy:
         [
             WampError,
             WampProtocolError,
-            WampInvalidMessage,
-            WampNoSuchProcedure,
-            WampNoSuchSubscription,
+            WampInvalidMessageError,
+            WampNoSuchProcedureError,
+            WampNoSuchSubscriptionError,
             WampRuntimeError,
-            WampCallTimeout,
-            WampCanceled,
-            WampProcedureAlreadyExists,
+            WampCallTimeoutError,
+            WampCanceledError,
+            WampProcedureAlreadyExistsError,
         ],
     )
     def test_is_exception(self, cls: type[WampError]) -> None:
@@ -43,13 +43,13 @@ class TestErrorHierarchy:
         "cls",
         [
             WampProtocolError,
-            WampInvalidMessage,
-            WampNoSuchProcedure,
-            WampNoSuchSubscription,
+            WampInvalidMessageError,
+            WampNoSuchProcedureError,
+            WampNoSuchSubscriptionError,
             WampRuntimeError,
-            WampCallTimeout,
-            WampCanceled,
-            WampProcedureAlreadyExists,
+            WampCallTimeoutError,
+            WampCanceledError,
+            WampProcedureAlreadyExistsError,
         ],
     )
     def test_subclass_of_wamp_error(self, cls: type[WampError]) -> None:
@@ -58,7 +58,7 @@ class TestErrorHierarchy:
     def test_catch_via_base_class(self) -> None:
         """Raising a subclass should be catchable via WampError."""
         with pytest.raises(WampError):
-            raise WampNoSuchProcedure("test.procedure")
+            raise WampNoSuchProcedureError("test.procedure")
 
 
 # ---------------------------------------------------------------------------
@@ -76,29 +76,29 @@ class TestErrorURIs:
         assert WampProtocolError.uri == "wamp.error.protocol_error"
 
     def test_invalid_message_uri(self) -> None:
-        assert WampInvalidMessage.uri == "wamp.error.invalid_message"
+        assert WampInvalidMessageError.uri == "wamp.error.invalid_message"
 
     def test_no_such_procedure_uri(self) -> None:
-        assert WampNoSuchProcedure.uri == "wamp.error.no_such_procedure"
+        assert WampNoSuchProcedureError.uri == "wamp.error.no_such_procedure"
 
     def test_no_such_subscription_uri(self) -> None:
-        assert WampNoSuchSubscription.uri == "wamp.error.no_such_subscription"
+        assert WampNoSuchSubscriptionError.uri == "wamp.error.no_such_subscription"
 
     def test_runtime_error_uri(self) -> None:
         assert WampRuntimeError.uri == "wamp.error.runtime_error"
 
     def test_call_timeout_uri(self) -> None:
-        assert WampCallTimeout.uri == "wamp.error.canceled"
+        assert WampCallTimeoutError.uri == "wamp.error.canceled"
 
     def test_canceled_uri(self) -> None:
-        assert WampCanceled.uri == "wamp.error.canceled"
+        assert WampCanceledError.uri == "wamp.error.canceled"
 
     def test_procedure_already_exists_uri(self) -> None:
-        assert WampProcedureAlreadyExists.uri == "wamp.error.procedure_already_exists"
+        assert WampProcedureAlreadyExistsError.uri == "wamp.error.procedure_already_exists"
 
     def test_uri_accessible_on_instance(self) -> None:
         """URI should also be accessible on instances, not just the class."""
-        err = WampNoSuchProcedure("com.example.missing")
+        err = WampNoSuchProcedureError("com.example.missing")
         assert err.uri == "wamp.error.no_such_procedure"
 
 
@@ -119,7 +119,7 @@ class TestMessageFormatting:
         assert str(err) == "something went wrong"
 
     def test_subclass_message(self) -> None:
-        err = WampNoSuchProcedure("com.example.nope")
+        err = WampNoSuchProcedureError("com.example.nope")
         assert str(err) == "com.example.nope"
 
     def test_repr_contains_class_name(self) -> None:
@@ -187,28 +187,28 @@ class TestRaiseAndCatch:
 
     def test_catch_no_such_procedure(self) -> None:
         try:
-            raise WampNoSuchProcedure("com.example.missing")
-        except WampNoSuchProcedure as e:
+            raise WampNoSuchProcedureError("com.example.missing")
+        except WampNoSuchProcedureError as e:
             assert str(e) == "com.example.missing"
             assert e.uri == "wamp.error.no_such_procedure"
 
     def test_catch_timeout(self) -> None:
         try:
-            raise WampCallTimeout("timed out after 5s")
-        except WampCallTimeout as e:
+            raise WampCallTimeoutError("timed out after 5s")
+        except WampCallTimeoutError as e:
             assert str(e) == "timed out after 5s"
             assert e.uri == "wamp.error.canceled"
 
     def test_catch_canceled(self) -> None:
         try:
-            raise WampCanceled("client canceled")
-        except WampCanceled as e:
+            raise WampCanceledError("client canceled")
+        except WampCanceledError as e:
             assert str(e) == "client canceled"
             assert e.uri == "wamp.error.canceled"
 
     def test_catch_procedure_already_exists(self) -> None:
         try:
-            raise WampProcedureAlreadyExists("com.example.dup")
-        except WampProcedureAlreadyExists as e:
+            raise WampProcedureAlreadyExistsError("com.example.dup")
+        except WampProcedureAlreadyExistsError as e:
             assert str(e) == "com.example.dup"
             assert e.uri == "wamp.error.procedure_already_exists"

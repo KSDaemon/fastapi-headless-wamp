@@ -2,7 +2,7 @@
 
 Covers:
 - session.cancel(request_id) sends CANCEL to the client
-- Client responds with ERROR wamp.error.canceled → pending call rejected with WampCanceled
+- Client responds with ERROR wamp.error.canceled → pending call rejected with WampCanceledError
 - Client completes call normally despite CANCEL → result returned as usual
 - cancel() for non-existent request_id is a no-op
 - Known wampy.js limitation documented (callee does not handle INTERRUPT)
@@ -19,7 +19,7 @@ from fastapi import WebSocket as FastAPIWebSocket
 from starlette.testclient import TestClient
 
 from fastapi_headless_wamp.errors import (
-    WampCanceled,
+    WampCanceledError,
     WampError,
 )
 from fastapi_headless_wamp.hub import WampHub
@@ -300,10 +300,10 @@ class TestCancelSendsMessage:
 
 
 class TestClientRespondsCanceled:
-    """Client responds with ERROR wamp.error.canceled → WampCanceled raised."""
+    """Client responds with ERROR wamp.error.canceled → WampCanceledError raised."""
 
     async def test_cancel_then_error_raises_wamp_canceled(self) -> None:
-        """After cancel(), client ERROR canceled rejects future with WampCanceled."""
+        """After cancel(), client ERROR canceled rejects future with WampCanceledError."""
         hub = WampHub(realm="realm1")
         ws = MockWebSocket(subprotocols=["wamp.2.json"])
 
@@ -320,7 +320,7 @@ class TestClientRespondsCanceled:
             async def do_call() -> None:
                 try:
                     await session.call("com.example.slow")
-                except WampCanceled as e:
+                except WampCanceledError as e:
                     call_error.append(e)
                 except Exception as e:
                     call_error.append(e)
@@ -354,12 +354,12 @@ class TestClientRespondsCanceled:
 
         assert len(call_error) == 1
         exc = call_error[0]
-        assert isinstance(exc, WampCanceled)
+        assert isinstance(exc, WampCanceledError)
         assert exc.uri == WAMP_ERROR_CANCELED
         assert exc.wamp_args == ["Call was canceled"]
 
     async def test_cancel_error_is_wamp_canceled_subclass(self) -> None:
-        """WampCanceled is also catchable as WampError."""
+        """WampCanceledError is also catchable as WampError."""
         hub = WampHub(realm="realm1")
         ws = MockWebSocket(subprotocols=["wamp.2.json"])
 
@@ -404,9 +404,9 @@ class TestClientRespondsCanceled:
         await hub.handle_websocket(ws)  # type: ignore[arg-type]
 
         assert len(call_error) == 1
-        # WampCanceled IS-A WampError
+        # WampCanceledError IS-A WampError
         assert isinstance(call_error[0], WampError)
-        assert isinstance(call_error[0], WampCanceled)
+        assert isinstance(call_error[0], WampCanceledError)
 
 
 # ---------------------------------------------------------------------------
@@ -562,7 +562,7 @@ class TestClientRespondsOtherError:
         assert len(call_error) == 1
         exc = call_error[0]
         assert isinstance(exc, WampError)
-        assert not isinstance(exc, WampCanceled)
+        assert not isinstance(exc, WampCanceledError)
         assert exc.uri == WAMP_ERROR_RUNTIME_ERROR
 
 
@@ -589,7 +589,7 @@ class TestCancelServerDispatchLoop:
             async def do_call() -> None:
                 try:
                     await session.call("com.example.slow")
-                except WampCanceled as e:
+                except WampCanceledError as e:
                     call_error.append(e)
                 except Exception as e:
                     call_error.append(e)
@@ -629,7 +629,7 @@ class TestCancelServerDispatchLoop:
         await asyncio.sleep(0.05)
 
         assert len(call_error) == 1
-        assert isinstance(call_error[0], WampCanceled)
+        assert isinstance(call_error[0], WampCanceledError)
 
     async def test_cancel_via_dispatch_loop_yield_completes(self) -> None:
         """Full flow: cancel, but client sends YIELD anyway via dispatch loop."""
@@ -702,7 +702,7 @@ class TestCancelServerFastAPI:
 
                 try:
                     result = await session.call("com.client.slow", args=[42])
-                except WampCanceled as e:
+                except WampCanceledError as e:
                     call_error.append(e)
                 except Exception as e:
                     call_error.append(e)
@@ -754,7 +754,7 @@ class TestCancelServerFastAPI:
                 assert goodbye_reply[0] == WampMessageType.GOODBYE
 
         assert len(call_error) == 1
-        assert isinstance(call_error[0], WampCanceled)
+        assert isinstance(call_error[0], WampCanceledError)
 
     def test_cancel_client_completes_normally(self) -> None:
         """Full flow via FastAPI: server calls, client ignores cancel and sends YIELD."""

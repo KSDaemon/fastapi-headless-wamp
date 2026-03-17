@@ -3,13 +3,13 @@
 import logging
 
 from fastapi_headless_wamp.errors import (
-    WampCallTimeout,
-    WampCanceled,
+    WampCallTimeoutError,
+    WampCanceledError,
     WampError,
-    WampInvalidMessage,
-    WampNoSuchProcedure,
-    WampNoSuchSubscription,
-    WampProcedureAlreadyExists,
+    WampInvalidMessageError,
+    WampNoSuchProcedureError,
+    WampNoSuchSubscriptionError,
+    WampProcedureAlreadyExistsError,
     WampProtocolError,
     WampRuntimeError,
 )
@@ -45,11 +45,11 @@ __all__ = [
     # Errors
     "WampError",
     "WampProtocolError",
-    "WampInvalidMessage",
-    "WampNoSuchProcedure",
-    "WampNoSuchSubscription",
+    "WampInvalidMessageError",
+    "WampNoSuchProcedureError",
+    "WampNoSuchSubscriptionError",
     "WampRuntimeError",
-    "WampCallTimeout",
-    "WampCanceled",
-    "WampProcedureAlreadyExists",
+    "WampCallTimeoutError",
+    "WampCanceledError",
+    "WampProcedureAlreadyExistsError",
 ]

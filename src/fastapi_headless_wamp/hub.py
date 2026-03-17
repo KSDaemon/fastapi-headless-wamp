@@ -11,7 +11,7 @@ from typing import Any
 from fastapi import APIRouter
 from starlette.websockets import WebSocket, WebSocketDisconnect
 
-from fastapi_headless_wamp.errors import WampCanceled, WampError
+from fastapi_headless_wamp.errors import WampCanceledError, WampError
 from fastapi_headless_wamp.protocol import (
     WAMP_ERROR_CANCELED,
     WAMP_ERROR_NO_SUCH_PROCEDURE,
@@ -59,12 +59,8 @@ class WampHub:
         self._sessions: dict[int, WampSession] = {}
         self._server_rpcs: dict[str, RpcHandler] = _rpc_registry()
         self._server_subscriptions: dict[str, list[RpcHandler]] = {}
-        self._on_session_open_callbacks: list[SessionCallback] = (
-            _session_callback_list()
-        )
-        self._on_session_close_callbacks: list[SessionCallback] = (
-            _session_callback_list()
-        )
+        self._on_session_open_callbacks: list[SessionCallback] = _session_callback_list()  # XXX Why?
+        self._on_session_close_callbacks: list[SessionCallback] = _session_callback_list()  # XXX Why?
         # Counter for generating unique registration IDs
         self._next_registration_id: int = 0
         # Counter for generating unique subscription IDs
@@ -123,7 +119,9 @@ class WampHub:
         Usage::
 
             @wamp.subscribe("com.example.event")
-            async def on_event(*args: Any, _session: WampSession | None = None, **kwargs: Any) -> None:
+            async def on_event(
+                *args: Any, _session: WampSession | None = None, **kwargs: Any
+            ) -> None:
                 print(f"Event received: {args}, {kwargs}")
 
         Both ``async def`` and regular ``def`` functions are supported.
@@ -253,7 +251,7 @@ class WampHub:
         for cb in self._on_session_open_callbacks:
             try:
                 await cb(session)
-            except Exception as exc:
+            except Exception as exc:  # XXX Use logger.exception?
                 logger.error("on_session_open callback error: %s", exc, exc_info=True)
 
     async def _fire_session_close(self, session: WampSession) -> None:
@@ -303,13 +301,13 @@ class WampHub:
         Looks up the procedure URI in the hub's server RPC registry,
         invokes the handler, and sends RESULT or ERROR back.
 
-        Supports three progressive features:
+        Supports two progressive features:
 
-        1. **Progressive call results** (US-012): when the client sends
+        1. **Progressive call results**: when the client sends
            ``receive_progress: true`` in the CALL options, the handler
            receives a ``_progress`` callback to send intermediate RESULTs.
 
-        2. **Progressive call invocations** (US-014): when the client
+        2. **Progressive call invocations**: when the client
            sends multiple CALL messages with the same ``request_id`` and
            ``options.progress = true``, the server accumulates chunks and
            passes an ``_input_chunks`` async iterator to the handler.  The
@@ -318,9 +316,7 @@ class WampHub:
         try:
             validate_call(msg)
         except WampError as exc:
-            logger.warning(
-                "Session %d: invalid CALL message: %s", session.session_id, exc
-            )
+            logger.warning("Session %d: invalid CALL message: %s", session.session_id, exc)
             return
 
         request_id: int = msg[1]
@@ -368,9 +364,7 @@ class WampHub:
 
             # Launch handler in a task so we can continue processing messages
             task = asyncio.create_task(
-                self._run_progressive_input_handler(
-                    session, request_id, options, handler, input_iter
-                )
+                self._run_progressive_input_handler(session, request_id, options, handler, input_iter)
             )
             session.store_progressive_input_task(request_id, task)
             # Also track as a running call task for CANCEL support
@@ -401,9 +395,7 @@ class WampHub:
 
         # Run handler in a task so the message loop can process CANCEL
         task = asyncio.create_task(
-            self._invoke_rpc_handler(
-                session, request_id, options, handler, call_args, call_kwargs, procedure
-            )
+            self._invoke_rpc_handler(session, request_id, options, handler, call_args, call_kwargs, procedure)
         )
         session.store_running_call_task(request_id, task)
 
@@ -469,11 +461,7 @@ class WampHub:
             # Determine timeout
             timeout_ms = options.get("timeout")
             timeout_s: float | None = None
-            if (
-                timeout_ms is not None
-                and isinstance(timeout_ms, (int, float))
-                and timeout_ms > 0
-            ):
+            if timeout_ms is not None and isinstance(timeout_ms, (int, float)) and timeout_ms > 0:
                 timeout_s = timeout_ms / 1000.0
 
             if inspect.iscoroutinefunction(handler):
@@ -601,11 +589,7 @@ class WampHub:
         # Determine timeout from options (milliseconds -> seconds)
         timeout_ms = options.get("timeout")
         timeout_s: float | None = None
-        if (
-            timeout_ms is not None
-            and isinstance(timeout_ms, (int, float))
-            and timeout_ms > 0
-        ):
+        if timeout_ms is not None and isinstance(timeout_ms, (int, float)) and timeout_ms > 0:
             timeout_s = timeout_ms / 1000.0
 
         # Invoke handler
@@ -736,9 +720,7 @@ class WampHub:
         try:
             validate_cancel(msg)
         except WampError as exc:
-            logger.warning(
-                "Session %d: invalid CANCEL message: %s", session.session_id, exc
-            )
+            logger.warning("Session %d: invalid CANCEL message: %s", session.session_id, exc)
             return
 
         request_id: int = msg[1]
@@ -769,8 +751,7 @@ class WampHub:
             ]
             await session.send_message(error_msg)
             logger.info(
-                "Session %d: CANCEL (skip) for request %d — "
-                "sent canceled error, handler still running",
+                "Session %d: CANCEL (skip) for request %d — sent canceled error, handler still running",
                 session.session_id,
                 request_id,
             )
@@ -787,8 +768,7 @@ class WampHub:
             ]
             await session.send_message(error_msg)
             logger.info(
-                "Session %d: CANCEL (killnowait) for request %d — "
-                "task cancelled, sent canceled error",
+                "Session %d: CANCEL (killnowait) for request %d — task cancelled, sent canceled error",
                 session.session_id,
                 request_id,
             )
@@ -797,8 +777,7 @@ class WampHub:
             # The task's CancelledError handler will send the ERROR message.
             task.cancel()
             logger.info(
-                "Session %d: CANCEL (kill) for request %d — "
-                "task cancelled, awaiting cleanup",
+                "Session %d: CANCEL (kill) for request %d — task cancelled, awaiting cleanup",
                 session.session_id,
                 request_id,
             )
@@ -811,7 +790,7 @@ class WampHub:
 
     def _generate_registration_id(self) -> int:
         """Generate a unique registration ID for a client RPC registration."""
-        self._next_registration_id += 1
+        self._next_registration_id += 1  # XXX: What about overflow?
         return self._next_registration_id
 
     async def _handle_register(self, session: WampSession, msg: list[Any]) -> None:
@@ -826,9 +805,7 @@ class WampHub:
         try:
             validate_register(msg)
         except WampError as exc:
-            logger.warning(
-                "Session %d: invalid REGISTER message: %s", session.session_id, exc
-            )
+            logger.warning("Session %d: invalid REGISTER message: %s", session.session_id, exc)
             return
 
         request_id: int = msg[1]
@@ -864,9 +841,7 @@ class WampHub:
         try:
             validate_unregister(msg)
         except WampError as exc:
-            logger.warning(
-                "Session %d: invalid UNREGISTER message: %s", session.session_id, exc
-            )
+            logger.warning("Session %d: invalid UNREGISTER message: %s", session.session_id, exc)
             return
 
         request_id: int = msg[1]
@@ -908,7 +883,7 @@ class WampHub:
 
     def _generate_subscription_id(self) -> int:
         """Generate a unique subscription ID for a client subscription."""
-        self._next_subscription_id += 1
+        self._next_subscription_id += 1  # XXX: What about overflow?
         return self._next_subscription_id
 
     async def _handle_subscribe(self, session: WampSession, msg: list[Any]) -> None:
@@ -922,9 +897,7 @@ class WampHub:
         try:
             validate_subscribe(msg)
         except WampError as exc:
-            logger.warning(
-                "Session %d: invalid SUBSCRIBE message: %s", session.session_id, exc
-            )
+            logger.warning("Session %d: invalid SUBSCRIBE message: %s", session.session_id, exc)
             return
 
         request_id: int = msg[1]
@@ -960,9 +933,7 @@ class WampHub:
         try:
             validate_unsubscribe(msg)
         except WampError as exc:
-            logger.warning(
-                "Session %d: invalid UNSUBSCRIBE message: %s", session.session_id, exc
-            )
+            logger.warning("Session %d: invalid UNSUBSCRIBE message: %s", session.session_id, exc)
             return
 
         request_id: int = msg[1]
@@ -1004,7 +975,7 @@ class WampHub:
 
     def _generate_hub_publication_id(self) -> int:
         """Generate a unique hub-level publication ID for PUBLISHED acknowledgments."""
-        self._next_hub_publication_id += 1
+        self._next_hub_publication_id += 1  # XXX: What about overflow?
         return self._next_hub_publication_id
 
     async def _handle_publish(self, session: WampSession, msg: list[Any]) -> None:
@@ -1026,9 +997,7 @@ class WampHub:
         try:
             validate_publish(msg)
         except WampError as exc:
-            logger.warning(
-                "Session %d: invalid PUBLISH message: %s", session.session_id, exc
-            )
+            logger.warning("Session %d: invalid PUBLISH message: %s", session.session_id, exc)
             return
 
         request_id: int = msg[1]
@@ -1039,6 +1008,7 @@ class WampHub:
 
         acknowledge = bool(options.get("acknowledge"))
 
+        # Why is this needed?
         # Parse options (trivial in peer-to-peer, but we parse them correctly)
         _exclude_me = options.get("exclude_me", True)  # noqa: F841 — parsed for correctness
         _eligible = options.get("eligible")  # noqa: F841 — parsed for correctness
@@ -1056,8 +1026,7 @@ class WampHub:
                     # Check if handler accepts _session parameter
                     sig = inspect.signature(handler)
                     handler_accepts_session = "_session" in sig.parameters or any(
-                        p.kind == inspect.Parameter.VAR_KEYWORD
-                        for p in sig.parameters.values()
+                        p.kind == inspect.Parameter.VAR_KEYWORD for p in sig.parameters.values()
                     )
                     if handler_accepts_session:
                         handler_kwargs["_session"] = session
@@ -1117,9 +1086,7 @@ class WampHub:
         """
         for session in list(self._sessions.values()):
             try:
-                await session.publish(
-                    topic, args=args, kwargs=kwargs, publisher=publisher
-                )
+                await session.publish(topic, args=args, kwargs=kwargs, publisher=publisher)
             except Exception as exc:
                 logger.error(
                     "Hub: failed to publish to session %d: %s",
@@ -1149,9 +1116,7 @@ class WampHub:
         try:
             validate_yield(msg)
         except WampError as exc:
-            logger.warning(
-                "Session %d: invalid YIELD message: %s", session.session_id, exc
-            )
+            logger.warning("Session %d: invalid YIELD message: %s", session.session_id, exc)
             return
 
         request_id: int = msg[1]
@@ -1194,9 +1159,7 @@ class WampHub:
             # Final YIELD: resolve the pending call future
             session.resolve_pending_call(request_id, result)
 
-    async def _handle_invocation_error(
-        self, session: WampSession, msg: list[Any]
-    ) -> None:
+    async def _handle_invocation_error(self, session: WampSession, msg: list[Any]) -> None:
         """Handle an ERROR message in response to an INVOCATION.
 
         Rejects the pending call Future with an appropriate exception.
@@ -1206,9 +1169,7 @@ class WampHub:
         try:
             validate_error(msg)
         except WampError as exc:
-            logger.warning(
-                "Session %d: invalid ERROR message: %s", session.session_id, exc
-            )
+            logger.warning("Session %d: invalid ERROR message: %s", session.session_id, exc)
             return
 
         request_id: int = msg[2]
@@ -1218,16 +1179,12 @@ class WampHub:
 
         error_message = error_args[0] if error_args else error_uri
 
-        # Use WampCanceled for the canceled error URI so callers can
+        # Use WampCanceledError for the canceled error URI so callers can
         # distinguish cancellation from other errors.
         if error_uri == WAMP_ERROR_CANCELED:
-            exception: WampError = WampCanceled(
-                str(error_message), args=error_args, kwargs=error_kwargs
-            )
+            exception: WampError = WampCanceledError(str(error_message), args=error_args, kwargs=error_kwargs)
         else:
-            exception = WampError(
-                str(error_message), args=error_args, kwargs=error_kwargs
-            )
+            exception = WampError(str(error_message), args=error_args, kwargs=error_kwargs)
             # Set the URI from the error message
             exception.uri = error_uri
 
@@ -1292,9 +1249,7 @@ class WampHub:
             # before firing close callbacks and cleanup.  This ensures
             # fast handlers that are already in-flight get a chance to
             # send their RESULT/ERROR before the session is torn down.
-            running_tasks = [
-                t for t in session.get_all_running_call_tasks() if not t.done()
-            ]
+            running_tasks = [t for t in session.get_all_running_call_tasks() if not t.done()]
             if running_tasks:
                 # Give running tasks a short grace period to finish
                 _done, pending = await asyncio.wait(running_tasks, timeout=1.0)

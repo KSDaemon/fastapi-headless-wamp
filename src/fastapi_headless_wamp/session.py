@@ -11,9 +11,9 @@ from typing import Any
 from starlette.websockets import WebSocket, WebSocketDisconnect
 
 from fastapi_headless_wamp.errors import (
-    WampCallTimeout,
+    WampCallTimeoutError,
     WampError,
-    WampNoSuchProcedure,
+    WampNoSuchProcedureError,
 )
 
 # Sentinel value to signal end of progressive input stream
@@ -37,6 +37,7 @@ logger = logging.getLogger(__name__)
 RpcHandler = Callable[..., Any]
 ProgressCallback = Callable[[Any], Awaitable[None]]
 
+# XXX: Mark as const?
 # WAMP role features advertised by the server
 DEALER_FEATURES: dict[str, bool] = {
     "progressive_call_results": True,
@@ -45,6 +46,7 @@ DEALER_FEATURES: dict[str, bool] = {
     "call_timeout": True,
 }
 
+# XXX: Mark as const?
 BROKER_FEATURES: dict[str, bool] = {
     "publisher_identification": True,
     "publisher_exclusion": True,
@@ -120,6 +122,7 @@ class ProgressiveCallInput:
         return args, kwargs
 
 
+# XXX: Move to protocol?
 def negotiate_subprotocol(
     requested_subprotocols: list[str],
 ) -> tuple[str, Serializer] | None:
@@ -178,14 +181,10 @@ class WampSession:
         self.pending_calls: dict[int, asyncio.Future[Any]] = _int_future_dict()
 
         # Progress callbacks for pending calls: request_id -> on_progress callback
-        self._pending_progress_callbacks: dict[int, ProgressCallback] = (
-            _int_progress_dict()
-        )
+        self._pending_progress_callbacks: dict[int, ProgressCallback] = _int_progress_dict()
 
         # Progressive call input state: request_id -> queue for incoming chunks
-        self._progressive_input_queues: dict[int, asyncio.Queue[Any]] = (
-            _int_queue_dict()
-        )
+        self._progressive_input_queues: dict[int, asyncio.Queue[Any]] = _int_queue_dict()
         # Tasks for progressive call handlers: request_id -> running handler task
         self._progressive_input_tasks: dict[int, asyncio.Task[Any]] = _int_task_dict()
 
@@ -390,9 +389,9 @@ class WampSession:
             args: Positional arguments for the invocation.
             kwargs: Keyword arguments for the invocation.
             timeout: Optional timeout in seconds. If the client does not
-                respond within this duration, :exc:`WampCallTimeout` is raised.
+                respond within this duration, :exc:`WampCallTimeoutError` is raised.
             receive_progress: If ``True``, the INVOCATION is sent with
-                ``details.receive_progress = true``, signalling the client
+                ``details.receive_progress = true``, signaling the client
                 that it may send progressive YIELD messages.
             on_progress: Optional async callback invoked for each progressive
                 YIELD received from the client.  The callback receives the
@@ -404,16 +403,14 @@ class WampSession:
             The result value from the client's final YIELD response.
 
         Raises:
-            WampNoSuchProcedure: If the URI is not registered on this session.
-            WampCallTimeout: If the client does not respond within *timeout*.
+            WampNoSuchProcedureError: If the URI is not registered on this session.
+            WampCallTimeoutError: If the client does not respond within *timeout*.
             WampError: If the client responds with an ERROR message.
         """
         # Look up URI in this session's client RPC map
         registration_id = self.client_rpc_uris.get(uri)
         if registration_id is None:
-            raise WampNoSuchProcedure(
-                f"Procedure '{uri}' not registered on session {self.session_id}"
-            )
+            raise WampNoSuchProcedureError(f"Procedure '{uri}' not registered on session {self.session_id}")
 
         request_id = self.next_request_id()
 
@@ -462,10 +459,7 @@ class WampSession:
             # Clean up the pending call
             self.pending_calls.pop(request_id, None)
             self._pending_progress_callbacks.pop(request_id, None)
-            raise WampCallTimeout(
-                f"Call to '{uri}' on session {self.session_id} timed out "
-                f"after {timeout}s"
-            )
+            raise WampCallTimeoutError(f"Call to '{uri}' on session {self.session_id} timed out after {timeout}s")
         finally:
             # Always clean up if still present
             self.pending_calls.pop(request_id, None)
@@ -525,7 +519,7 @@ class WampSession:
 
     def _next_publication_id(self) -> int:
         """Generate the next unique publication ID for this session."""
-        self._publication_id_counter += 1
+        self._publication_id_counter += 1  # XXX: What about overflow?
         return self._publication_id_counter
 
     async def publish(
@@ -538,7 +532,7 @@ class WampSession:
         """Publish an event to this client session if it is subscribed to *topic*.
 
         Sends an EVENT message to the client for the given topic.  If the
-        client has not subscribed to *topic*, the publish is silently
+        client has not subscribed to *topic*, the publishing is silently
         ignored (no error).
 
         Args:
@@ -594,9 +588,7 @@ class WampSession:
         """Check if a progressive input stream is active for *request_id*."""
         return request_id in self._progressive_input_queues
 
-    def create_progressive_input(
-        self, request_id: int
-    ) -> tuple[asyncio.Queue[Any], ProgressiveCallInput]:
+    def create_progressive_input(self, request_id: int) -> tuple[asyncio.Queue[Any], ProgressiveCallInput]:
         """Create a new progressive input queue and iterator for *request_id*.
 
         Returns ``(queue, iterator)`` where *queue* is used by the hub to
@@ -610,9 +602,7 @@ class WampSession:
         """Return the progressive input queue for *request_id*, if any."""
         return self._progressive_input_queues.get(request_id)
 
-    def store_progressive_input_task(
-        self, request_id: int, task: asyncio.Task[Any]
-    ) -> None:
+    def store_progressive_input_task(self, request_id: int, task: asyncio.Task[Any]) -> None:
         """Store the handler task for a progressive call input."""
         self._progressive_input_tasks[request_id] = task
 
@@ -629,7 +619,7 @@ class WampSession:
         """Store a running handler task for a client CALL.
 
         Used by the hub to track in-flight handler tasks so they can be
-        cancelled when a CANCEL message arrives.
+        canceled when a CANCEL message arrives.
         """
         self._running_call_tasks[request_id] = task
 
@@ -646,14 +636,14 @@ class WampSession:
         return list(self._running_call_tasks.values())
 
     def mark_request_cancelled(self, request_id: int) -> None:
-        """Mark *request_id* as cancelled (ERROR already sent by CANCEL handler).
+        """Mark *request_id* as canceled (ERROR already sent by CANCEL handler).
 
         The RPC handler should suppress sending RESULT/ERROR for this request.
         """
         self._cancelled_request_ids.add(request_id)
 
     def is_request_cancelled(self, request_id: int) -> bool:
-        """Check whether *request_id* has been cancelled (ERROR already sent)."""
+        """Check whether *request_id* has been canceled (ERROR already sent)."""
         return request_id in self._cancelled_request_ids
 
     def clear_cancelled_request(self, request_id: int) -> None:
@@ -732,9 +722,7 @@ class WampSession:
         # Reject all pending call futures
         for request_id, future in self.pending_calls.items():
             if not future.done():
-                future.set_exception(
-                    WampError(f"Session {self.session_id} disconnected")
-                )
+                future.set_exception(WampError(f"Session {self.session_id} disconnected"))
                 logger.debug(
                     "Session %d: rejected pending call %d",
                     self.session_id,

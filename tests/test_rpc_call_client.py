@@ -4,8 +4,8 @@ Covers:
 - session.call(uri, args, kwargs, timeout) sends INVOCATION and awaits result
 - Successful call: client responds with YIELD -> result returned
 - Client error response: client responds with ERROR -> WampError raised
-- Timeout: client doesn't respond in time -> WampCallTimeout raised
-- Non-existent procedure: URI not in client_rpcs -> WampNoSuchProcedure raised
+- Timeout: client doesn't respond in time -> WampCallTimeoutError raised
+- Non-existent procedure: URI not in client_rpcs -> WampNoSuchProcedureError raised
 - Disconnect during pending call: future rejected with WampError
 - Server-initiated request IDs use a separate counter from client-initiated IDs
 """
@@ -21,9 +21,9 @@ from fastapi import WebSocket as FastAPIWebSocket
 from starlette.testclient import TestClient
 
 from fastapi_headless_wamp.errors import (
-    WampCallTimeout,
+    WampCallTimeoutError,
     WampError,
-    WampNoSuchProcedure,
+    WampNoSuchProcedureError,
 )
 from fastapi_headless_wamp.hub import WampHub
 from fastapi_headless_wamp.protocol import (
@@ -520,10 +520,10 @@ class TestSessionCallError:
 
 
 class TestSessionCallTimeout:
-    """Timeout raises WampCallTimeout."""
+    """Timeout raises WampCallTimeoutError."""
 
     async def test_call_timeout(self) -> None:
-        """Call with timeout that expires raises WampCallTimeout."""
+        """Call with timeout that expires raises WampCallTimeoutError."""
         hub = WampHub(realm="realm1")
         ws = MockWebSocket(subprotocols=["wamp.2.json"])
 
@@ -541,7 +541,7 @@ class TestSessionCallTimeout:
             async def do_call() -> None:
                 try:
                     await session.call("com.example.slow", timeout=0.05)
-                except WampCallTimeout as e:
+                except WampCallTimeoutError as e:
                     call_error.append(e)
 
             call_task = asyncio.create_task(do_call())
@@ -556,7 +556,7 @@ class TestSessionCallTimeout:
         await hub.handle_websocket(ws)  # type: ignore[arg-type]
 
         assert len(call_error) == 1
-        assert isinstance(call_error[0], WampCallTimeout)
+        assert isinstance(call_error[0], WampCallTimeoutError)
 
     async def test_call_timeout_cleans_up_pending(self) -> None:
         """After timeout, the pending call is removed from the map."""
@@ -575,7 +575,7 @@ class TestSessionCallTimeout:
 
             try:
                 await session.call("com.example.slow", timeout=0.05)
-            except WampCallTimeout:
+            except WampCallTimeoutError:
                 pass
 
             pending_count_after.append(len(session.pending_calls))
@@ -596,10 +596,10 @@ class TestSessionCallTimeout:
 
 
 class TestSessionCallNoSuchProcedure:
-    """Calling a non-existent URI raises WampNoSuchProcedure."""
+    """Calling a non-existent URI raises WampNoSuchProcedureError."""
 
     async def test_call_nonexistent_procedure(self) -> None:
-        """session.call() for unknown URI raises WampNoSuchProcedure."""
+        """session.call() for unknown URI raises WampNoSuchProcedureError."""
         hub = WampHub(realm="realm1")
         ws = MockWebSocket(subprotocols=["wamp.2.json"])
 
@@ -613,7 +613,7 @@ class TestSessionCallNoSuchProcedure:
         async def hooked_loop(session: WampSession) -> None:
             try:
                 await session.call("com.example.unknown")
-            except WampNoSuchProcedure as e:
+            except WampNoSuchProcedureError as e:
                 call_error.append(e)
 
             ws.enqueue_text(json.dumps(make_goodbye()))
@@ -624,7 +624,7 @@ class TestSessionCallNoSuchProcedure:
         await hub.handle_websocket(ws)  # type: ignore[arg-type]
 
         assert len(call_error) == 1
-        assert isinstance(call_error[0], WampNoSuchProcedure)
+        assert isinstance(call_error[0], WampNoSuchProcedureError)
 
     async def test_call_nonexistent_sends_no_invocation(self) -> None:
         """session.call() for unknown URI does not send INVOCATION."""
@@ -638,7 +638,7 @@ class TestSessionCallNoSuchProcedure:
         async def hooked_loop(session: WampSession) -> None:
             try:
                 await session.call("com.example.unknown")
-            except WampNoSuchProcedure:
+            except WampNoSuchProcedureError:
                 pass
 
             ws.enqueue_text(json.dumps(make_goodbye()))

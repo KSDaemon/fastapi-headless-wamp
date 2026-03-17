@@ -3,7 +3,7 @@
 from enum import IntEnum
 from typing import Any, cast
 
-from fastapi_headless_wamp.errors import WampInvalidMessage
+from fastapi_headless_wamp.errors import WampInvalidMessageError
 
 # ---------------------------------------------------------------------------
 # WAMP message type codes (RFC-compliant IntEnum)
@@ -58,21 +58,15 @@ WAMP_ERROR_GOODBYE_AND_OUT = "wamp.error.goodbye_and_out"
 
 
 def _check_min_length(msg: list[Any], min_len: int, msg_type: str) -> None:
-    """Raise WampInvalidMessage if *msg* is shorter than *min_len*."""
+    """Raise WampInvalidMessageError if *msg* is shorter than *min_len*."""
     if len(msg) < min_len:
-        raise WampInvalidMessage(
-            f"{msg_type} message must have at least {min_len} elements, got {len(msg)}"
-        )
+        raise WampInvalidMessageError(f"{msg_type} message must have at least {min_len} elements, got {len(msg)}")
 
 
-def _check_type(
-    value: Any, expected: type | tuple[type, ...], field: str, msg_type: str
-) -> None:
-    """Raise WampInvalidMessage if *value* is not the expected type."""
+def _check_type(value: Any, expected: type | tuple[type, ...], field: str, msg_type: str) -> None:
+    """Raise WampInvalidMessageError if *value* is not the expected type."""
     if not isinstance(value, expected):
-        raise WampInvalidMessage(
-            f"{msg_type} field '{field}' must be {expected}, got {type(value).__name__}"
-        )
+        raise WampInvalidMessageError(f"{msg_type} field '{field}' must be {expected}, got {type(value).__name__}")
 
 
 # ---------------------------------------------------------------------------
@@ -305,19 +299,19 @@ def validate_message(msg: Any) -> None:
     message type code, and delegates to the per-type validator.
 
     Raises:
-        WampInvalidMessage: If the message is malformed.
+        WampInvalidMessageError: If the message is malformed.
     """
     if not isinstance(msg, list):
-        raise WampInvalidMessage("WAMP message must be a non-empty list")
+        raise WampInvalidMessageError("WAMP message must be a non-empty list")
 
     raw_list = msg
     if len(raw_list) == 0:
-        raise WampInvalidMessage("WAMP message must be a non-empty list")
+        raise WampInvalidMessageError("WAMP message must be a non-empty list")
 
     try:
         msg_type = WampMessageType(raw_list[0])
     except ValueError:
-        raise WampInvalidMessage(f"Unknown WAMP message type code: {raw_list[0]}")
+        raise WampInvalidMessageError(f"Unknown WAMP message type code: {raw_list[0]}")
 
     validator = _VALIDATORS.get(msg_type)
     if validator is not None:

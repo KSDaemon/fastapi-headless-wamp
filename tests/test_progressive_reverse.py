@@ -23,7 +23,7 @@ from fastapi import WebSocket as FastAPIWebSocket
 from starlette.testclient import TestClient
 
 from fastapi_headless_wamp.errors import (
-    WampCallTimeout,
+    WampCallTimeoutError,
 )
 from fastapi_headless_wamp.hub import WampHub
 from fastapi_headless_wamp.protocol import WampMessageType
@@ -633,7 +633,7 @@ class TestProgressCallbackCleanup:
                     on_progress=on_progress,
                     timeout=0.05,
                 )
-            except WampCallTimeout:
+            except WampCallTimeoutError:
                 pass
 
             progress_cb_count_after.append(len(session._pending_progress_callbacks))

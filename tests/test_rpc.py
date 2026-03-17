@@ -21,7 +21,7 @@ from fastapi import FastAPI
 from fastapi import WebSocket as FastAPIWebSocket
 from starlette.testclient import TestClient
 
-from fastapi_headless_wamp.errors import WampNoSuchProcedure
+from fastapi_headless_wamp.errors import WampNoSuchProcedureError
 from fastapi_headless_wamp.hub import WampHub
 from fastapi_headless_wamp.protocol import (
     WAMP_ERROR_CANCELED,
@@ -404,7 +404,7 @@ class TestExceptionHandling:
 
         @hub.register("com.example.wamp_err")
         async def wamp_err() -> None:
-            raise WampNoSuchProcedure("custom message")
+            raise WampNoSuchProcedureError("custom message")
 
         app = _make_app(hub)
         with TestClient(app) as client:
@@ -432,7 +432,7 @@ class TestExceptionHandling:
 
         @hub.register("com.example.wamp_err_payload")
         async def wamp_err_payload() -> None:
-            raise WampNoSuchProcedure(
+            raise WampNoSuchProcedureError(
                 "not found",
                 args=["extra_arg"],
                 kwargs={"detail": "more info"},

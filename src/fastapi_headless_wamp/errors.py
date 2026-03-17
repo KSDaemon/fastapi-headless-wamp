@@ -25,19 +25,19 @@ class WampProtocolError(WampError):
     uri: str = "wamp.error.protocol_error"
 
 
-class WampInvalidMessage(WampError):
+class WampInvalidMessageError(WampError):
     """Invalid WAMP message."""
 
     uri: str = "wamp.error.invalid_message"
 
 
-class WampNoSuchProcedure(WampError):
+class WampNoSuchProcedureError(WampError):
     """No such procedure registered."""
 
     uri: str = "wamp.error.no_such_procedure"
 
 
-class WampNoSuchSubscription(WampError):
+class WampNoSuchSubscriptionError(WampError):
     """No such subscription exists."""
 
     uri: str = "wamp.error.no_such_subscription"
@@ -49,19 +49,19 @@ class WampRuntimeError(WampError):
     uri: str = "wamp.error.runtime_error"
 
 
-class WampCallTimeout(WampError):
+class WampCallTimeoutError(WampError):
     """Call timed out waiting for response."""
 
     uri: str = "wamp.error.canceled"
 
 
-class WampCanceled(WampError):
+class WampCanceledError(WampError):
     """Call was canceled."""
 
     uri: str = "wamp.error.canceled"
 
 
-class WampProcedureAlreadyExists(WampError):
+class WampProcedureAlreadyExistsError(WampError):
     """Procedure is already registered."""
 
     uri: str = "wamp.error.procedure_already_exists"
