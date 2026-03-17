@@ -53,7 +53,7 @@ jobs:
       - name: Run all tests with coverage
         run: |
           uv run pytest -n auto tests/ \
-            --cov=src \
+            --cov \
             --cov-report=xml \
             --cov-report=html \
             --cov-report=json \
