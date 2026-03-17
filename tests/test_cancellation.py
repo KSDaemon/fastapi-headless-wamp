@@ -12,6 +12,7 @@ from __future__ import annotations
 
 import asyncio
 import json
+import time
 from typing import Any
 
 from fastapi import FastAPI
@@ -454,7 +455,6 @@ class TestCancelFastAPIIntegration:
                 ws.send_json(call_msg)
 
                 # Small sleep to let handler start
-                import time
 
                 time.sleep(0.1)
 
@@ -497,7 +497,6 @@ class TestCancelEdgeCases:
         def sync_slow_handler() -> str:
             # Signal start from thread
             handler_started._loop.call_soon_threadsafe(handler_started.set)  # type: ignore[attr-defined]
-            import time
 
             time.sleep(10)
             return "done"

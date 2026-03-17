@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+import json
 from typing import Any
 from unittest.mock import AsyncMock
 
@@ -135,7 +136,6 @@ class TestSendReceiveJson:
         assert len(ws.sent_texts) == 1
         assert len(ws.sent_bytes) == 0
         # Should be valid JSON
-        import json
 
         assert json.loads(ws.sent_texts[0]) == msg
 
@@ -152,8 +152,6 @@ class TestSendReceiveJson:
         session = make_session(ws)
         original = [50, 1, {}, [42]]
         await session.send_message(original)
-
-        import json
 
         decoded = json.loads(ws.sent_texts[0])
         assert decoded == original
@@ -175,12 +173,10 @@ class TestSendReceiveBinary:
                 return True
 
             def encode(self, data: list[object]) -> bytes:
-                import json
 
                 return json.dumps(data).encode("utf-8")
 
             def decode(self, data: str | bytes) -> list[object]:
-                import json
 
                 raw = data if isinstance(data, bytes) else data.encode("utf-8")
                 result: list[object] = json.loads(raw)
@@ -201,7 +197,6 @@ class TestSendReceiveBinary:
         ws = MockWebSocket()
         serializer = self._make_binary_serializer()
         session = make_session(ws, serializer)
-        import json
 
         ws.enqueue_bytes(json.dumps([48, 1, {}, "com.add"]).encode("utf-8"))
         msg = await session.receive_message()

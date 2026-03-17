@@ -73,7 +73,7 @@ dummy-variable-rgx = "^(_+|(_+[a-zA-Z0-9_]*[a-zA-Z0-9]+?))$"
 [lint.per-file-ignores]
 "scripts/*" = ["T20", "PLR0912"]
 "src/fastapi_headless_wamp/hub.py" = ["PLR0911", "PLR0912", "PLR0915"]  # complex WAMP message dispatch
-"src/fastapi_headless_wamp/types.py" = ["PLC0415"]  # circular import workaround (fixed in step 4)
+
 "src/fastapi_headless_wamp/session.py" = ["FBT001", "FBT002"]  # receive_progress keyword arg is fine
 "tests/*" = [
     "T20",       # print statements
@@ -84,7 +84,6 @@ dummy-variable-rgx = "^(_+|(_+[a-zA-Z0-9_]*[a-zA-Z0-9]+?))$"
     "PT017",     # pytest-assert-in-except (common test pattern)
     "PLR0912",   # too-many-branches (complex test setups)
     "PLR0915",   # too-many-statements (complex test setups)
-    "PLC0415",   # import-outside-top-level (will be fixed separately)
     "RUF006",    # asyncio-dangling-task (intentional in tests)
     "TC001",     # typing-only imports (test runtime needs them)
     "TC003",     # typing-only imports (test runtime needs them)

@@ -18,6 +18,7 @@ from typing import Any
 from fastapi import FastAPI
 from fastapi import WebSocket as FastAPIWebSocket
 from starlette.testclient import TestClient
+from starlette.websockets import WebSocketDisconnect
 
 from fastapi_headless_wamp.hub import WampHub
 from fastapi_headless_wamp.protocol import (
@@ -554,7 +555,6 @@ class TestSubscriptionCleanup:
 
     async def test_subscriptions_cleared_on_disconnect(self) -> None:
         """Subscriptions are cleaned up when WebSocket disconnects unexpectedly."""
-        from starlette.websockets import WebSocketDisconnect
 
         hub = WampHub(realm="realm1")
         ws = MockWebSocket(subprotocols=["wamp.2.json"])

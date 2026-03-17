@@ -18,6 +18,7 @@ from typing import Any
 from fastapi import FastAPI
 from fastapi import WebSocket as FastAPIWebSocket
 from starlette.testclient import TestClient
+from starlette.websockets import WebSocketDisconnect
 
 from fastapi_headless_wamp.hub import WampHub
 from fastapi_headless_wamp.protocol import (
@@ -171,7 +172,6 @@ class TestSessionTracking:
         # StopAsyncIteration when the queue is empty and the task ends.
         # We need to simulate a disconnect by putting a bad message or
         # closing: let's use a hooked loop that raises WebSocketDisconnect.
-        from starlette.websockets import WebSocketDisconnect
 
         async def crash_loop(session: WampSession) -> None:
             raise WebSocketDisconnect
@@ -309,7 +309,6 @@ class TestLifecycleCallbacks:
 
     async def test_close_callback_fires_on_disconnect(self) -> None:
         """on_session_close fires even on unexpected disconnects."""
-        from starlette.websockets import WebSocketDisconnect
 
         hub = WampHub(realm="realm1")
         closed_sessions: list[int] = []

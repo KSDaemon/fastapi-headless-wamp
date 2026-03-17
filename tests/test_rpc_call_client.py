@@ -15,11 +15,13 @@ from __future__ import annotations
 import asyncio
 import contextlib
 import json
+import time
 from typing import Any
 
 from fastapi import FastAPI
 from fastapi import WebSocket as FastAPIWebSocket
 from starlette.testclient import TestClient
+from starlette.websockets import WebSocketDisconnect
 
 from fastapi_headless_wamp.errors import (
     WampCallTimeoutError,
@@ -668,7 +670,6 @@ class TestSessionCallDisconnect:
         call_error: list[Exception] = []
 
         async def hooked_loop(session: WampSession) -> None:
-            from starlette.websockets import WebSocketDisconnect
 
             msg = await session.receive_message()
             await hub._handle_register(session, msg)
@@ -942,7 +943,6 @@ class TestFastAPIIntegrationCallClient:
                 ws.send_json(make_yield_msg(inv_request_id, ["pong"]))
 
                 # Small delay then close
-                import time
 
                 time.sleep(0.1)
 

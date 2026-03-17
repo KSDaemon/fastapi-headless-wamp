@@ -15,6 +15,7 @@ import json
 from typing import Any
 from unittest.mock import AsyncMock
 
+from fastapi_headless_wamp.hub import WampHub
 from fastapi_headless_wamp.protocol import (
     WAMP_ERROR_CLOSE_REALM,
     WAMP_ERROR_GOODBYE_AND_OUT,
@@ -389,7 +390,6 @@ class TestHubHandleWebsocket:
 
     async def test_hub_rejects_no_subprotocol(self) -> None:
         """Hub closes WebSocket if no WAMP subprotocol matches."""
-        from fastapi_headless_wamp.hub import WampHub
 
         hub = WampHub(realm="realm1")
         ws = MockWebSocket(subprotocols=["graphql-ws"])
@@ -402,7 +402,6 @@ class TestHubHandleWebsocket:
 
     async def test_hub_handshake_and_goodbye(self) -> None:
         """Hub completes handshake, session is tracked, GOODBYE removes it."""
-        from fastapi_headless_wamp.hub import WampHub
 
         hub = WampHub(realm="realm1")
         ws = MockWebSocket(subprotocols=["wamp.2.json"])
@@ -433,7 +432,6 @@ class TestHubHandleWebsocket:
 
     async def test_hub_handshake_abort_on_bad_first_message(self) -> None:
         """Hub aborts if first message is not HELLO."""
-        from fastapi_headless_wamp.hub import WampHub
 
         hub = WampHub(realm="realm1")
         ws = MockWebSocket(subprotocols=["wamp.2.json"])
@@ -451,7 +449,6 @@ class TestHubHandleWebsocket:
 
     async def test_hub_tracks_multiple_sessions(self) -> None:
         """Hub can track multiple concurrent sessions."""
-        from fastapi_headless_wamp.hub import WampHub
 
         hub = WampHub(realm="realm1")
 
@@ -479,7 +476,6 @@ class TestHubHandleWebsocket:
 
     async def test_hub_session_tracked_during_connection(self) -> None:
         """Session is accessible in hub.sessions while connected."""
-        from fastapi_headless_wamp.hub import WampHub
 
         hub = WampHub(realm="realm1")
         ws = MockWebSocket(subprotocols=["wamp.2.json"])

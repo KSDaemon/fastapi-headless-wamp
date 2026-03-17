@@ -17,6 +17,7 @@ from typing import Any
 from fastapi import FastAPI
 from fastapi import WebSocket as FastAPIWebSocket
 from starlette.testclient import TestClient
+from starlette.websockets import WebSocketDisconnect
 
 from fastapi_headless_wamp.hub import WampHub
 from fastapi_headless_wamp.protocol import (
@@ -564,7 +565,6 @@ class TestCleanupOnDisconnect:
 
     async def test_registrations_cleared_on_disconnect(self) -> None:
         """When session disconnects, client_rpcs and client_rpc_uris are cleared."""
-        from starlette.websockets import WebSocketDisconnect
 
         hub = WampHub(realm="realm1")
         ws = MockWebSocket(subprotocols=["wamp.2.json"])

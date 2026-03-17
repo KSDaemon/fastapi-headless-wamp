@@ -5,6 +5,8 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from typing import Any
 
+from fastapi_headless_wamp.protocol import WampMessageType
+
 # ---------------------------------------------------------------------------
 # Primitive type aliases
 # ---------------------------------------------------------------------------
@@ -49,8 +51,6 @@ class HelloMessage:
     details: dict[str, Any] = field(default_factory=_dict_factory)
 
     def to_list(self) -> WampMessage:
-        from fastapi_headless_wamp.protocol import WampMessageType
-
         return [WampMessageType.HELLO, self.realm, self.details]
 
 
@@ -62,8 +62,6 @@ class WelcomeMessage:
     details: dict[str, Any] = field(default_factory=_dict_factory)
 
     def to_list(self) -> WampMessage:
-        from fastapi_headless_wamp.protocol import WampMessageType
-
         return [WampMessageType.WELCOME, self.session, self.details]
 
 
@@ -75,8 +73,6 @@ class AbortMessage:
     reason: str
 
     def to_list(self) -> WampMessage:
-        from fastapi_headless_wamp.protocol import WampMessageType
-
         return [WampMessageType.ABORT, self.details, self.reason]
 
 
@@ -88,8 +84,6 @@ class GoodbyeMessage:
     reason: str
 
     def to_list(self) -> WampMessage:
-        from fastapi_headless_wamp.protocol import WampMessageType
-
         return [WampMessageType.GOODBYE, self.details, self.reason]
 
 
@@ -105,8 +99,6 @@ class ErrorMessage:
     arguments_kw: WampKwargs = field(default_factory=_dict_factory)
 
     def to_list(self) -> WampMessage:
-        from fastapi_headless_wamp.protocol import WampMessageType
-
         msg: WampMessage = [
             WampMessageType.ERROR,
             self.request_type,
@@ -132,8 +124,6 @@ class PublishMessage:
     arguments_kw: WampKwargs = field(default_factory=_dict_factory)
 
     def to_list(self) -> WampMessage:
-        from fastapi_headless_wamp.protocol import WampMessageType
-
         msg: WampMessage = [
             WampMessageType.PUBLISH,
             self.request_id,
@@ -155,8 +145,6 @@ class PublishedMessage:
     publication_id: int
 
     def to_list(self) -> WampMessage:
-        from fastapi_headless_wamp.protocol import WampMessageType
-
         return [WampMessageType.PUBLISHED, self.request_id, self.publication_id]
 
 
@@ -169,8 +157,6 @@ class SubscribeMessage:
     topic: str
 
     def to_list(self) -> WampMessage:
-        from fastapi_headless_wamp.protocol import WampMessageType
-
         return [WampMessageType.SUBSCRIBE, self.request_id, self.options, self.topic]
 
 
@@ -182,8 +168,6 @@ class SubscribedMessage:
     subscription_id: int
 
     def to_list(self) -> WampMessage:
-        from fastapi_headless_wamp.protocol import WampMessageType
-
         return [WampMessageType.SUBSCRIBED, self.request_id, self.subscription_id]
 
 
@@ -195,8 +179,6 @@ class UnsubscribeMessage:
     subscription_id: int
 
     def to_list(self) -> WampMessage:
-        from fastapi_headless_wamp.protocol import WampMessageType
-
         return [WampMessageType.UNSUBSCRIBE, self.request_id, self.subscription_id]
 
 
@@ -207,8 +189,6 @@ class UnsubscribedMessage:
     request_id: int
 
     def to_list(self) -> WampMessage:
-        from fastapi_headless_wamp.protocol import WampMessageType
-
         return [WampMessageType.UNSUBSCRIBED, self.request_id]
 
 
@@ -223,8 +203,6 @@ class EventMessage:
     arguments_kw: WampKwargs = field(default_factory=_dict_factory)
 
     def to_list(self) -> WampMessage:
-        from fastapi_headless_wamp.protocol import WampMessageType
-
         msg: WampMessage = [
             WampMessageType.EVENT,
             self.subscription_id,
@@ -249,8 +227,6 @@ class CallMessage:
     arguments_kw: WampKwargs = field(default_factory=_dict_factory)
 
     def to_list(self) -> WampMessage:
-        from fastapi_headless_wamp.protocol import WampMessageType
-
         msg: WampMessage = [
             WampMessageType.CALL,
             self.request_id,
@@ -272,8 +248,6 @@ class CancelMessage:
     options: dict[str, Any] = field(default_factory=_dict_factory)
 
     def to_list(self) -> WampMessage:
-        from fastapi_headless_wamp.protocol import WampMessageType
-
         return [WampMessageType.CANCEL, self.request_id, self.options]
 
 
@@ -287,8 +261,6 @@ class ResultMessage:
     arguments_kw: WampKwargs = field(default_factory=_dict_factory)
 
     def to_list(self) -> WampMessage:
-        from fastapi_headless_wamp.protocol import WampMessageType
-
         msg: WampMessage = [WampMessageType.RESULT, self.request_id, self.details]
         if self.arguments_kw:
             msg.extend([self.arguments, self.arguments_kw])
@@ -306,8 +278,6 @@ class RegisterMessage:
     procedure: str
 
     def to_list(self) -> WampMessage:
-        from fastapi_headless_wamp.protocol import WampMessageType
-
         return [WampMessageType.REGISTER, self.request_id, self.options, self.procedure]
 
 
@@ -319,8 +289,6 @@ class RegisteredMessage:
     registration_id: int
 
     def to_list(self) -> WampMessage:
-        from fastapi_headless_wamp.protocol import WampMessageType
-
         return [WampMessageType.REGISTERED, self.request_id, self.registration_id]
 
 
@@ -332,8 +300,6 @@ class UnregisterMessage:
     registration_id: int
 
     def to_list(self) -> WampMessage:
-        from fastapi_headless_wamp.protocol import WampMessageType
-
         return [WampMessageType.UNREGISTER, self.request_id, self.registration_id]
 
 
@@ -344,8 +310,6 @@ class UnregisteredMessage:
     request_id: int
 
     def to_list(self) -> WampMessage:
-        from fastapi_headless_wamp.protocol import WampMessageType
-
         return [WampMessageType.UNREGISTERED, self.request_id]
 
 
@@ -360,8 +324,6 @@ class InvocationMessage:
     arguments_kw: WampKwargs = field(default_factory=_dict_factory)
 
     def to_list(self) -> WampMessage:
-        from fastapi_headless_wamp.protocol import WampMessageType
-
         msg: WampMessage = [
             WampMessageType.INVOCATION,
             self.request_id,
@@ -383,8 +345,6 @@ class InterruptMessage:
     options: dict[str, Any] = field(default_factory=_dict_factory)
 
     def to_list(self) -> WampMessage:
-        from fastapi_headless_wamp.protocol import WampMessageType
-
         return [WampMessageType.INTERRUPT, self.request_id, self.options]
 
 
@@ -398,8 +358,6 @@ class YieldMessage:
     arguments_kw: WampKwargs = field(default_factory=_dict_factory)
 
     def to_list(self) -> WampMessage:
-        from fastapi_headless_wamp.protocol import WampMessageType
-
         msg: WampMessage = [WampMessageType.YIELD, self.request_id, self.options]
         if self.arguments_kw:
             msg.extend([self.arguments, self.arguments_kw])

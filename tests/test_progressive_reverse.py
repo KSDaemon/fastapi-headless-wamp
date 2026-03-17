@@ -17,6 +17,7 @@ from __future__ import annotations
 import asyncio
 import contextlib
 import json
+import time
 from typing import Any
 
 from fastapi import FastAPI
@@ -766,7 +767,6 @@ class TestFastAPIIntegrationProgressive:
                 ws.send_json(make_yield_msg(inv_request_id, ["all_done"]))
 
                 # Small delay then close
-                import time
 
                 time.sleep(0.2)
 

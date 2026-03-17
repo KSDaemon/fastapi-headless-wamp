@@ -11,6 +11,7 @@ Covers:
 
 from __future__ import annotations
 
+import asyncio
 from typing import Any
 
 from fastapi import FastAPI
@@ -21,7 +22,7 @@ from fastapi_headless_wamp.hub import WampHub
 from fastapi_headless_wamp.protocol import (
     WampMessageType,
 )
-from fastapi_headless_wamp.session import ProgressiveCallInput
+from fastapi_headless_wamp.session import PROGRESSIVE_INPUT_END, ProgressiveCallInput
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -487,9 +488,6 @@ class TestProgressiveCallInputIterator:
 
     async def test_single_chunk_and_end(self) -> None:
         """Iterator yields one chunk then stops."""
-        import asyncio
-
-        from fastapi_headless_wamp.session import PROGRESSIVE_INPUT_END
 
         queue: asyncio.Queue[Any] = asyncio.Queue()
         pci = ProgressiveCallInput(queue)
@@ -504,9 +502,6 @@ class TestProgressiveCallInputIterator:
 
     async def test_multiple_chunks(self) -> None:
         """Iterator yields multiple chunks in order."""
-        import asyncio
-
-        from fastapi_headless_wamp.session import PROGRESSIVE_INPUT_END
 
         queue: asyncio.Queue[Any] = asyncio.Queue()
         pci = ProgressiveCallInput(queue)
@@ -526,9 +521,6 @@ class TestProgressiveCallInputIterator:
 
     async def test_empty_stream(self) -> None:
         """Iterator with just end sentinel yields nothing."""
-        import asyncio
-
-        from fastapi_headless_wamp.session import PROGRESSIVE_INPUT_END
 
         queue: asyncio.Queue[Any] = asyncio.Queue()
         pci = ProgressiveCallInput(queue)

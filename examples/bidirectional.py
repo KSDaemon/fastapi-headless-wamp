@@ -13,6 +13,7 @@ and the server calls them when the session opens.
 """
 
 import asyncio
+import datetime
 
 from fastapi import FastAPI
 from fastapi_headless_wamp import WampHub, WampSession
@@ -33,8 +34,6 @@ async def ping() -> str:
 @wamp.register("com.server.time")
 async def server_time() -> str:
     """Return the current server time."""
-    import datetime
-
     return datetime.datetime.now(datetime.timezone.utc).isoformat()
 
 

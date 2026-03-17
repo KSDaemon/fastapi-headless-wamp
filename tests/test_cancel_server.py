@@ -13,6 +13,7 @@ from __future__ import annotations
 import asyncio
 import contextlib
 import json
+import time
 from typing import Any
 
 from fastapi import FastAPI
@@ -722,7 +723,6 @@ class TestCancelServerFastAPI:
                 assert invocation[4] == [42]
 
                 # Simulate: give server time to cancel
-                import time
 
                 time.sleep(0.1)
 
@@ -799,7 +799,6 @@ class TestCancelServerFastAPI:
                 inv_request_id = invocation[1]
 
                 # Client may also receive CANCEL — try to receive it
-                import time
 
                 time.sleep(0.2)
 
