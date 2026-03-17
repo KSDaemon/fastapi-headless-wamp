@@ -15,7 +15,6 @@ from fastapi_headless_wamp.serializers import (
     register_serializer,
 )
 
-
 # ---------------------------------------------------------------------------
 # JsonSerializer tests
 # ---------------------------------------------------------------------------

@@ -15,8 +15,6 @@ import json
 from typing import Any
 from unittest.mock import AsyncMock
 
-import pytest
-
 from fastapi_headless_wamp.protocol import (
     WAMP_ERROR_CLOSE_REALM,
     WAMP_ERROR_GOODBYE_AND_OUT,
@@ -29,7 +27,6 @@ from fastapi_headless_wamp.session import (
     WampSession,
     negotiate_subprotocol,
 )
-
 
 # ---------------------------------------------------------------------------
 # Mock WebSocket for handshake tests

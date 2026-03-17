@@ -13,7 +13,8 @@ from __future__ import annotations
 
 from typing import Any
 
-from fastapi import FastAPI, WebSocket as FastAPIWebSocket
+from fastapi import FastAPI
+from fastapi import WebSocket as FastAPIWebSocket
 from starlette.testclient import TestClient
 
 from fastapi_headless_wamp.hub import WampHub
@@ -21,7 +22,6 @@ from fastapi_headless_wamp.protocol import (
     WampMessageType,
 )
 from fastapi_headless_wamp.session import ProgressiveCallInput
-
 
 # ---------------------------------------------------------------------------
 # Helpers

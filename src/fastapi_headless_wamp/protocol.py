@@ -5,7 +5,6 @@ from typing import Any, cast
 
 from fastapi_headless_wamp.errors import WampInvalidMessage
 
-
 # ---------------------------------------------------------------------------
 # WAMP message type codes (RFC-compliant IntEnum)
 # ---------------------------------------------------------------------------

@@ -4,14 +4,13 @@ from __future__ import annotations
 
 import asyncio
 from typing import Any
-from unittest.mock import AsyncMock, MagicMock
+from unittest.mock import AsyncMock
 
 import pytest
 
 from fastapi_headless_wamp.errors import WampError
 from fastapi_headless_wamp.serializers import JsonSerializer, Serializer
 from fastapi_headless_wamp.session import WampSession
-
 
 # ---------------------------------------------------------------------------
 # Helpers: mock WebSocket that simulates Starlette's WebSocket interface

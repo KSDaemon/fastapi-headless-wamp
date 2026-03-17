@@ -15,8 +15,8 @@ import asyncio
 import json
 from typing import Any
 
-import pytest
-from fastapi import FastAPI, WebSocket as FastAPIWebSocket
+from fastapi import FastAPI
+from fastapi import WebSocket as FastAPIWebSocket
 from starlette.testclient import TestClient
 
 from fastapi_headless_wamp.hub import WampHub
@@ -25,7 +25,6 @@ from fastapi_headless_wamp.protocol import (
     WampMessageType,
 )
 from fastapi_headless_wamp.session import WampSession
-
 
 # ---------------------------------------------------------------------------
 # Mock WebSocket (reusable helper identical to test_handshake)

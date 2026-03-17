@@ -14,7 +14,8 @@ from __future__ import annotations
 
 from typing import Any
 
-from fastapi import FastAPI, WebSocket as FastAPIWebSocket
+from fastapi import FastAPI
+from fastapi import WebSocket as FastAPIWebSocket
 from starlette.testclient import TestClient
 
 from fastapi_headless_wamp.hub import WampHub
@@ -24,7 +25,6 @@ from fastapi_headless_wamp.protocol import (
     WampMessageType,
 )
 from fastapi_headless_wamp.service import WampService, rpc
-
 
 # ---------------------------------------------------------------------------
 # Helper: FastAPI app + handshake
@@ -130,12 +130,12 @@ class TestRpcDecorator:
 
     def test_rpc_with_explicit_uri(self) -> None:
         svc = MathService()
-        assert getattr(svc.mul, "_rpc_uri") == "multiply"
+        assert svc.mul._rpc_uri == "multiply"
 
     def test_rpc_with_inferred_uri(self) -> None:
         svc = MathService()
         # @rpc() with no args sets _rpc_uri = None (infer from name)
-        assert getattr(svc.add, "_rpc_uri") is None
+        assert svc.add._rpc_uri is None
 
     def test_non_rpc_method_has_no_marker(self) -> None:
         svc = MathService()
@@ -155,7 +155,7 @@ class TestRegisterService:
         svc = MathService()
         hub.register_service(svc)
 
-        rpcs: dict[str, Any] = getattr(hub, "_server_rpcs")
+        rpcs: dict[str, Any] = hub._server_rpcs
         assert "com.example.math.add" in rpcs
         assert "com.example.math.multiply" in rpcs
         assert "com.example.math.subtract" in rpcs
@@ -165,7 +165,7 @@ class TestRegisterService:
         svc = MathService()
         hub.register_service(svc)
 
-        rpcs: dict[str, Any] = getattr(hub, "_server_rpcs")
+        rpcs: dict[str, Any] = hub._server_rpcs
         # "multiply" is the explicit URI from @rpc("multiply")
         assert "com.example.math.multiply" in rpcs
 
@@ -174,7 +174,7 @@ class TestRegisterService:
         svc = MathService()
         hub.register_service(svc)
 
-        rpcs: dict[str, Any] = getattr(hub, "_server_rpcs")
+        rpcs: dict[str, Any] = hub._server_rpcs
         # "add" is inferred from method name
         assert "com.example.math.add" in rpcs
 
@@ -183,7 +183,7 @@ class TestRegisterService:
         svc = NoPrefixService()
         hub.register_service(svc)
 
-        rpcs: dict[str, Any] = getattr(hub, "_server_rpcs")
+        rpcs: dict[str, Any] = hub._server_rpcs
         assert "greet" in rpcs
         assert "echo" in rpcs
 
@@ -201,7 +201,7 @@ class TestRegisterService:
         hub.register_service(svc1)
         hub.register_service(svc2)
 
-        rpcs: dict[str, Any] = getattr(hub, "_server_rpcs")
+        rpcs: dict[str, Any] = hub._server_rpcs
         # Math service RPCs
         assert "com.example.math.add" in rpcs
         assert "com.example.math.multiply" in rpcs
@@ -219,7 +219,7 @@ class TestRegisterService:
         svc = MathService()
         hub.register_service(svc)
 
-        rpcs: dict[str, Any] = getattr(hub, "_server_rpcs")
+        rpcs: dict[str, Any] = hub._server_rpcs
         assert "com.example.standalone" in rpcs
         assert "com.example.math.add" in rpcs
 

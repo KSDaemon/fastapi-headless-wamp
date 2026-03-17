@@ -5,8 +5,8 @@ from __future__ import annotations
 import asyncio
 import logging
 import random
-from collections.abc import Awaitable
-from typing import Any, AsyncIterator, Callable
+from collections.abc import AsyncIterator, Awaitable, Callable
+from typing import Any
 
 from starlette.websockets import WebSocket, WebSocketDisconnect
 
@@ -458,7 +458,7 @@ class WampSession:
                 result = await asyncio.wait_for(future, timeout=timeout)
             else:
                 result = await future
-        except asyncio.TimeoutError:
+        except TimeoutError:
             # Clean up the pending call
             self.pending_calls.pop(request_id, None)
             self._pending_progress_callbacks.pop(request_id, None)

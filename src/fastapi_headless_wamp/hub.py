@@ -486,7 +486,7 @@ class WampHub:
             else:
                 result = await coro
 
-        except asyncio.TimeoutError:
+        except TimeoutError:
             error_msg: list[Any] = [
                 WampMessageType.ERROR,
                 WampMessageType.CALL,
@@ -621,7 +621,7 @@ class WampHub:
             else:
                 result = await coro
 
-        except asyncio.TimeoutError:
+        except TimeoutError:
             # If CANCEL already sent the ERROR, suppress duplicate
             if session.is_request_cancelled(request_id):
                 session.clear_cancelled_request(request_id)

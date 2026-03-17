@@ -20,15 +20,14 @@ import asyncio
 import json
 from typing import Any
 
-import pytest
-from fastapi import FastAPI, WebSocket as FastAPIWebSocket
+from fastapi import FastAPI
+from fastapi import WebSocket as FastAPIWebSocket
 from starlette.testclient import TestClient
 
 from fastapi_headless_wamp.hub import WampHub
 from fastapi_headless_wamp.protocol import WampMessageType
 from fastapi_headless_wamp.service import WampService, subscribe
 from fastapi_headless_wamp.session import WampSession
-
 
 # ---------------------------------------------------------------------------
 # Mock WebSocket (reusable helper)
@@ -119,7 +118,7 @@ class TestSubscribeDecorator:
         async def on_event() -> None:
             pass
 
-        subs = getattr(hub, "_server_subscriptions")
+        subs = hub._server_subscriptions
         assert "com.example.event" in subs
         assert len(subs["com.example.event"]) == 1
 
@@ -145,7 +144,7 @@ class TestSubscribeDecorator:
         async def handler2() -> None:
             pass
 
-        subs = getattr(hub, "_server_subscriptions")
+        subs = hub._server_subscriptions
         assert len(subs["com.example.event"]) == 2
 
 

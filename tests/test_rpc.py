@@ -17,9 +17,11 @@ import asyncio
 import json
 from typing import Any
 
-from fastapi import FastAPI, WebSocket as FastAPIWebSocket
+from fastapi import FastAPI
+from fastapi import WebSocket as FastAPIWebSocket
 from starlette.testclient import TestClient
 
+from fastapi_headless_wamp.errors import WampNoSuchProcedure
 from fastapi_headless_wamp.hub import WampHub
 from fastapi_headless_wamp.protocol import (
     WAMP_ERROR_CANCELED,
@@ -27,8 +29,6 @@ from fastapi_headless_wamp.protocol import (
     WAMP_ERROR_RUNTIME_ERROR,
     WampMessageType,
 )
-from fastapi_headless_wamp.errors import WampNoSuchProcedure
-
 
 # ---------------------------------------------------------------------------
 # Mock WebSocket (consistent with test_hub.py)
@@ -138,7 +138,7 @@ class TestRegisterDecorator:
             return a + b
 
         # Access via internal dict (cast to Any for test introspection)
-        rpcs: dict[str, Any] = getattr(hub, "_server_rpcs")
+        rpcs: dict[str, Any] = hub._server_rpcs
         assert "com.example.add" in rpcs
         assert rpcs["com.example.add"] is add
 
@@ -153,7 +153,7 @@ class TestRegisterDecorator:
         async def mul(a: int, b: int) -> int:
             return a * b
 
-        rpcs: dict[str, Any] = getattr(hub, "_server_rpcs")
+        rpcs: dict[str, Any] = hub._server_rpcs
         assert len(rpcs) == 2
         assert "com.example.add" in rpcs
         assert "com.example.mul" in rpcs
@@ -175,7 +175,7 @@ class TestRegisterDecorator:
         def sync_add(a: int, b: int) -> int:
             return a + b
 
-        rpcs: dict[str, Any] = getattr(hub, "_server_rpcs")
+        rpcs: dict[str, Any] = hub._server_rpcs
         assert "com.example.sync_add" in rpcs
 
 

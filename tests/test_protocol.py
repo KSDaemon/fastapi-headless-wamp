@@ -22,7 +22,6 @@ from fastapi_headless_wamp.protocol import (
     validate_goodbye,
     validate_hello,
     validate_interrupt,
-    validate_welcome,
     validate_invocation,
     validate_message,
     validate_publish,
@@ -36,6 +35,7 @@ from fastapi_headless_wamp.protocol import (
     validate_unregistered,
     validate_unsubscribe,
     validate_unsubscribed,
+    validate_welcome,
     validate_yield,
 )
 from fastapi_headless_wamp.types import (
@@ -45,7 +45,6 @@ from fastapi_headless_wamp.types import (
     ResultMessage,
     WelcomeMessage,
 )
-
 
 # ---------------------------------------------------------------------------
 # WampMessageType IntEnum tests

@@ -14,14 +14,14 @@ from __future__ import annotations
 from collections.abc import Callable, Coroutine
 from typing import Any
 
-from fastapi import FastAPI, WebSocket as FastAPIWebSocket
+from fastapi import FastAPI
+from fastapi import WebSocket as FastAPIWebSocket
 from starlette.testclient import TestClient
 
 from fastapi_headless_wamp.hub import WampHub
 from fastapi_headless_wamp.protocol import (
     WampMessageType,
 )
-
 
 # ---------------------------------------------------------------------------
 # Helpers
