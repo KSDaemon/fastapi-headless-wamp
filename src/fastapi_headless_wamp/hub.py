@@ -57,7 +57,7 @@ def _rpc_registry() -> dict[str, RpcHandler]:
 class WampHub:
     """Central hub that manages WAMP sessions and routes messages."""
 
-    def __init__(self, realm: str = "realm1") -> None:
+    def __init__(self, realm: str) -> None:
         self.realm = realm
         self._sessions: dict[int, WampSession] = {}
         self._server_rpcs: dict[str, RpcHandler] = _rpc_registry()
@@ -266,7 +266,7 @@ class WampHub:
         Usage::
 
             app = FastAPI()
-            wamp = WampHub()
+            wamp = WampHub(realm="realm1")
             app.include_router(wamp.get_router(path="/ws"))
 
         This is a convenience wrapper around :meth:`handle_websocket`

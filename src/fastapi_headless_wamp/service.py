@@ -69,7 +69,7 @@ class WampService:
                 return a * b
 
 
-        hub = WampHub()
+        hub = WampHub(realm="realm1")
         hub.register_service(MathService())
     """
 
