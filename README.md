@@ -1,6 +1,6 @@
 # fastapi-headless-wamp
 
-![wamp-fast-api-logo.png](misc/wamp-fast-api-logo.png)
+![fastapi-headless-wamp logo](https://raw.githubusercontent.com/KSDaemon/fastapi-headless-wamp/main/misc/wamp-fast-api-logo.png)
 
 Full bidirectional [WAMP](https://wamp-proto.org/) (Web Application Messaging Protocol) RPC and PubSub 
 for [FastAPI](https://fastapi.tiangolo.com/) — **without a separate WAMP router**.
