@@ -2,6 +2,7 @@
 
 import logging
 
+from fastapi_headless_wamp._version import __version__, __version_tuple__
 from fastapi_headless_wamp.errors import (
     WampCallTimeoutError,
     WampCanceledError,
@@ -43,6 +44,8 @@ __all__ = [
     "WampRuntimeError",
     "WampService",
     "WampSession",
+    "__version__",
+    "__version_tuple__",
     "get_available_subprotocols",
     "get_serializer",
     "register_serializer",

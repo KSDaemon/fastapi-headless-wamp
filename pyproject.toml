@@ -1,10 +1,10 @@
 [build-system]
-requires = ["hatchling"]
+requires = ["hatchling", "hatch-vcs"]
 build-backend = "hatchling.build"
 
 [project]
 name = "fastapi-headless-wamp"
-version = "0.1.0"
+dynamic = ["version"]
 description = "Bidirectional WAMP RPC and PubSub for FastAPI without a separate router"
 readme = "README.md"
 license = "Apache-2.0"
@@ -31,8 +31,8 @@ dependencies = [
 ]
 
 [project.urls]
-Homepage = "https://github.com/example/fastapi-headless-wamp"
-Repository = "https://github.com/example/fastapi-headless-wamp"
+Homepage = "https://github.com/KSDaemon/fastapi-headless-wamp"
+Repository = "https://github.com/KSDaemon/fastapi-headless-wamp"
 
 [dependency-groups]
 dev = [
@@ -44,6 +44,15 @@ dev = [
     "ruff>=0.15.6",
     "uvicorn>=0.30",
 ]
+
+[tool.hatch.version]
+source = "vcs"
+
+[tool.hatch.version.raw-options]
+version_scheme = "no-guess-dev"
+
+[tool.hatch.build.hooks.vcs]
+version-file = "src/fastapi_headless_wamp/_version.py"
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/fastapi_headless_wamp"]

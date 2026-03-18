@@ -6,6 +6,9 @@ __pycache__/
 # C extensions
 *.so
 
+# Auto-generated version file (hatch-vcs)
+src/fastapi_headless_wamp/_version.py
+
 # Distribution / packaging
 .Python
 build/
