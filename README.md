@@ -243,7 +243,7 @@ register_serializer(MsgpackSerializer())
 
 Clients can then connect with the `wamp.2.msgpack` subprotocol.
 
-## wampy.js Compatibility
+## Clients Compatibility
 
 This library is designed to be compatible with [wampy.js](https://github.com/nicola/wampy.js) and other standard WAMP clients. The server 
 advertises the following WAMP role features:
