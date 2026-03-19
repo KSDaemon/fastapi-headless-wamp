@@ -3,7 +3,6 @@
   "type": "module",
   "description": "Node.js dependencies for the end-to-end WAMP demo client (wampy.js)",
   "dependencies": {
-    "wampy": "^7.2.0",
-    "ws": "^8.18.0"
+    "wampy": "^8.0.1"
   }
 }

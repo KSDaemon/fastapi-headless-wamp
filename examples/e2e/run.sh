@@ -56,11 +56,7 @@ banner "1/4  Installing Node.js dependencies"
 
 cd "$SCRIPT_DIR"
 
-if [ ! -d "node_modules/wampy" ]; then
-  npm install --no-fund --no-audit 2>&1 | sed 's/^/  /'
-else
-  info "  node_modules/wampy already present — skipping npm install"
-fi
+npm install --no-fund --no-audit 2>&1 | sed 's/^/  /'
 
 # ── 2. Start the FastAPI server ──────────────────────────────────────
 
