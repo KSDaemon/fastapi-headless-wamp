@@ -2,7 +2,10 @@
 
 import json
 import logging
-from typing import Protocol, runtime_checkable
+from datetime import date, datetime, time
+from decimal import Decimal
+from typing import Any, Protocol, runtime_checkable
+from uuid import UUID
 
 logger = logging.getLogger(__name__)
 
@@ -25,8 +28,44 @@ class Serializer(Protocol):
     def decode(self, data: str | bytes) -> list[object]: ...
 
 
+def _json_default(obj: Any) -> Any:
+    """Fallback handler for ``json.dumps`` — supports common types.
+
+    * **Pydantic models** — calls ``model_dump()`` (dict with Python types,
+      then recursively serialized).
+    * **dataclasses** — calls ``__dict__``.
+    * ``datetime``, ``date``, ``time`` — ISO 8601 string.
+    * ``Decimal`` — float.
+    * ``UUID`` — string.
+    * ``set`` / ``frozenset`` — list.
+    * ``bytes`` — latin-1 string.
+    """
+    # Pydantic v2
+    if hasattr(obj, "model_dump"):
+        return obj.model_dump()
+    # dataclass
+    if hasattr(obj, "__dataclass_fields__"):
+        return obj.__dict__
+    if isinstance(obj, (datetime, date, time)):
+        return obj.isoformat()
+    if isinstance(obj, Decimal):
+        return float(obj)
+    if isinstance(obj, UUID):
+        return str(obj)
+    if isinstance(obj, (set, frozenset)):
+        return list(obj)
+    if isinstance(obj, bytes):
+        return obj.decode("latin-1")
+    raise TypeError(f"Object of type {type(obj).__name__} is not JSON serializable")
+
+
 class JsonSerializer:
-    """JSON serializer for WAMP messages."""
+    """JSON serializer for WAMP messages.
+
+    Uses :func:`_json_default` as the fallback handler so that Pydantic
+    models, dataclasses, ``datetime``, ``Decimal``, ``UUID``, and other
+    common types can be serialized without explicit conversion.
+    """
 
     @property
     def protocol(self) -> str:
@@ -37,7 +76,7 @@ class JsonSerializer:
         return False
 
     def encode(self, data: list[object]) -> str:
-        return json.dumps(data)
+        return json.dumps(data, default=_json_default)
 
     def decode(self, data: str | bytes) -> list[object]:
         result: list[object] = json.loads(data)
