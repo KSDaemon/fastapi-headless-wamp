@@ -142,6 +142,72 @@ class CborSerializer:
 
 
 # ---------------------------------------------------------------------------
+# MsgPack serializer (optional — requires ``msgpack``)
+# ---------------------------------------------------------------------------
+
+
+def _msgpack_default(obj: Any) -> Any:
+    """Fallback for msgpack — handles Pydantic models, dataclasses, and common types.
+
+    ``msgpack`` only natively supports ``int``, ``float``, ``str``, ``bytes``,
+    ``list``, ``dict``, ``bool``, and ``None``.  Everything else needs
+    explicit conversion here.
+    """
+    if hasattr(obj, "model_dump"):
+        return obj.model_dump()
+    if hasattr(obj, "__dataclass_fields__"):
+        return obj.__dict__
+    if isinstance(obj, (datetime, date, time)):
+        return obj.isoformat()
+    if isinstance(obj, Decimal):
+        return float(obj)
+    if isinstance(obj, UUID):
+        return str(obj)
+    if isinstance(obj, (set, frozenset)):
+        return list(obj)
+    raise TypeError(f"Object of type {type(obj).__name__} is not MsgPack serializable")
+
+
+class MsgpackSerializer:
+    """MsgPack serializer for WAMP messages (``wamp.2.msgpack``).
+
+    Requires the ``msgpack`` package::
+
+        pip install fastapi-headless-wamp[msgpack]
+
+    MsgPack is a compact binary format that is faster and smaller than JSON
+    while supporting the same data types.
+    """
+
+    def __init__(self) -> None:
+        try:
+            import msgpack as _msgpack
+        except ImportError as exc:
+            raise ImportError(
+                "msgpack is required for MsgPack serialization. "
+                "Install it with: pip install fastapi-headless-wamp[msgpack]"
+            ) from exc
+        self._msgpack = _msgpack
+
+    @property
+    def protocol(self) -> str:
+        return "msgpack"
+
+    @property
+    def is_binary(self) -> bool:
+        return True
+
+    def encode(self, data: list[object]) -> bytes:
+        return self._msgpack.packb(data, default=_msgpack_default, use_bin_type=True)
+
+    def decode(self, data: str | bytes) -> list[object]:
+        if isinstance(data, str):
+            data = data.encode("utf-8")
+        result: list[object] = self._msgpack.unpackb(data, raw=False)
+        return result
+
+
+# ---------------------------------------------------------------------------
 # Global serializer registry
 # ---------------------------------------------------------------------------
 
@@ -185,3 +251,8 @@ try:
     register_serializer(CborSerializer())
 except ImportError:
     pass  # cbor2 not installed — CBOR subprotocol won't be available
+
+try:
+    register_serializer(MsgpackSerializer())
+except ImportError:
+    pass  # msgpack not installed — MsgPack subprotocol won't be available

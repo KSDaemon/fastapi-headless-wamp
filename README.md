@@ -48,10 +48,11 @@ and client communicate directly within the session. This means:
 pip install fastapi-headless-wamp
 ```
 
-For CBOR serialization support (binary, more compact than JSON):
+With binary serialization (CBOR and/or MsgPack):
 
 ```bash
 pip install fastapi-headless-wamp[cbor]
+pip install fastapi-headless-wamp[msgpack]
 ```
 
 ## Quick Start
@@ -230,6 +231,7 @@ async def on_close(session: WampSession) -> None:
 |---|---|---|---|
 | `JsonSerializer` | `wamp.2.json` | Text (UTF-8) | included |
 | `CborSerializer` | `wamp.2.cbor` | Binary | `pip install fastapi-headless-wamp[cbor]` |
+| `MsgpackSerializer` | `wamp.2.msgpack` | Binary | `pip install fastapi-headless-wamp[msgpack]` |
 
 Both are registered automatically at import time (CBOR only when `cbor2` is installed).
 The server advertises all available subprotocols during the WebSocket handshake and the

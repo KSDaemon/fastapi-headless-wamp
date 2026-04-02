@@ -18,6 +18,7 @@ from fastapi_headless_wamp.hub import WampHub
 from fastapi_headless_wamp.serializers import (
     CborSerializer,
     JsonSerializer,
+    MsgpackSerializer,
     Serializer,
     get_available_subprotocols,
     get_serializer,
@@ -32,6 +33,7 @@ logging.getLogger("fastapi_headless_wamp").addHandler(logging.NullHandler())
 __all__ = [
     "CborSerializer",
     "JsonSerializer",
+    "MsgpackSerializer",
     "ProgressiveCallInput",
     "Serializer",
     "WampCallTimeoutError",

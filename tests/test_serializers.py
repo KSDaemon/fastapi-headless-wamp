@@ -15,6 +15,7 @@ from fastapi_headless_wamp.serializers import (
     WAMP_SUBPROTOCOL_PREFIX,
     CborSerializer,
     JsonSerializer,
+    MsgpackSerializer,
     Serializer,
     get_available_subprotocols,
     get_serializer,
@@ -98,7 +99,7 @@ class TestSerializerRegistry:
 
     def test_get_serializer_unknown_raises_key_error(self) -> None:
         with pytest.raises(KeyError):
-            get_serializer("msgpack")
+            get_serializer("flatbuffers")
 
     def test_register_custom_serializer(self) -> None:
         """Register a custom serializer and retrieve it."""
@@ -165,10 +166,10 @@ class TestSubprotocols:
     def test_custom_serializer_appears_in_subprotocols(self) -> None:
         """After registering a custom serializer its subprotocol is listed."""
 
-        class MsgpackSerializer:
+        class FlatbufSerializer:
             @property
             def protocol(self) -> str:
-                return "msgpack"
+                return "flatbuf"
 
             @property
             def is_binary(self) -> bool:
@@ -180,9 +181,9 @@ class TestSubprotocols:
             def decode(self, data: str | bytes) -> list[object]:
                 return []
 
-        register_serializer(MsgpackSerializer())
+        register_serializer(FlatbufSerializer())
         subprotocols = get_available_subprotocols()
-        assert "wamp.2.msgpack" in subprotocols
+        assert "wamp.2.flatbuf" in subprotocols
         assert "wamp.2.json" in subprotocols
 
 
@@ -338,3 +339,115 @@ class TestCborSerializer:
     def test_available_in_subprotocols(self) -> None:
         subprotocols = get_available_subprotocols()
         assert "wamp.2.cbor" in subprotocols
+
+
+# ---------------------------------------------------------------------------
+# MsgpackSerializer tests
+# ---------------------------------------------------------------------------
+
+
+class TestMsgpackSerializer:
+    def test_protocol_name(self) -> None:
+        s = MsgpackSerializer()
+        assert s.protocol == "msgpack"
+
+    def test_is_binary(self) -> None:
+        s = MsgpackSerializer()
+        assert s.is_binary is True
+
+    def test_encode_returns_bytes(self) -> None:
+        s = MsgpackSerializer()
+        msg: list[object] = [1, "realm1", {"roles": {"caller": {}}}]
+        encoded = s.encode(msg)
+        assert isinstance(encoded, bytes)
+
+    def test_encode_decode_roundtrip(self) -> None:
+        s = MsgpackSerializer()
+        original: list[object] = [
+            36,
+            42,
+            100,
+            {},
+            ["hello", "world"],
+            {"key": "value"},
+        ]
+        encoded = s.encode(original)
+        decoded = s.decode(encoded)
+        assert decoded == original
+
+    def test_decode_from_bytes(self) -> None:
+        s = MsgpackSerializer()
+        msg: list[object] = [48, 1, {}, "com.example.add", [2, 3]]
+        encoded = s.encode(msg)
+        decoded = s.decode(encoded)
+        assert decoded == msg
+
+    def test_encode_empty_message(self) -> None:
+        s = MsgpackSerializer()
+        encoded = s.encode([])
+        decoded = s.decode(encoded)
+        assert decoded == []
+
+    def test_implements_serializer_protocol(self) -> None:
+        s = MsgpackSerializer()
+        assert isinstance(s, Serializer)
+
+    def test_pydantic_model(self) -> None:
+        s = MsgpackSerializer()
+        msg: list[object] = [50, 1, {}, [_SampleModel(name="test", value=42)]]
+        encoded = s.encode(msg)
+        decoded = s.decode(encoded)
+        assert decoded[3][0] == {"name": "test", "value": 42}
+
+    def test_dataclass(self) -> None:
+        s = MsgpackSerializer()
+        msg: list[object] = [50, 1, {}, [_SampleDC(x=10, y="hello")]]
+        encoded = s.encode(msg)
+        decoded = s.decode(encoded)
+        assert decoded[3][0] == {"x": 10, "y": "hello"}
+
+    def test_datetime_as_isoformat(self) -> None:
+        """MsgPack converts datetime to ISO string (unlike CBOR which preserves it)."""
+        s = MsgpackSerializer()
+        dt = datetime(2025, 6, 15, 12, 30, 0, tzinfo=timezone.utc)
+        msg: list[object] = [50, 1, {}, [{"ts": dt}]]
+        encoded = s.encode(msg)
+        decoded = s.decode(encoded)
+        assert decoded[3][0]["ts"] == "2025-06-15T12:30:00+00:00"
+
+    def test_decimal(self) -> None:
+        s = MsgpackSerializer()
+        msg: list[object] = [50, 1, {}, [{"price": Decimal("19.99")}]]
+        encoded = s.encode(msg)
+        decoded = s.decode(encoded)
+        assert decoded[3][0]["price"] == 19.99
+
+    def test_uuid(self) -> None:
+        s = MsgpackSerializer()
+        uid = UUID("12345678-1234-5678-1234-567812345678")
+        msg: list[object] = [50, 1, {}, [{"id": uid}]]
+        encoded = s.encode(msg)
+        decoded = s.decode(encoded)
+        assert decoded[3][0]["id"] == "12345678-1234-5678-1234-567812345678"
+
+    def test_set_and_frozenset(self) -> None:
+        s = MsgpackSerializer()
+        msg: list[object] = [50, 1, {}, [{"tags": frozenset(["a", "b"])}]]
+        encoded = s.encode(msg)
+        decoded = s.decode(encoded)
+        assert sorted(decoded[3][0]["tags"]) == ["a", "b"]
+
+    def test_unsupported_type_raises(self) -> None:
+        s = MsgpackSerializer()
+        msg: list[object] = [50, 1, {}, [{"bad": object()}]]
+        with pytest.raises(TypeError, match="not MsgPack serializable"):
+            s.encode(msg)
+
+    def test_registered_by_default(self) -> None:
+        """MsgpackSerializer is auto-registered when msgpack is available."""
+        s = get_serializer("msgpack")
+        assert isinstance(s, MsgpackSerializer)
+
+    def test_available_in_subprotocols(self) -> None:
+        subprotocols = get_available_subprotocols()
+        assert "wamp.2.msgpack" in subprotocols

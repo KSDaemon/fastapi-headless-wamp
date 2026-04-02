@@ -115,11 +115,11 @@ class TestSubprotocolNegotiation:
         result = negotiate_subprotocol(["wamp.2.msgpack", "wamp.2.json"])
         assert result is not None
         subproto, _serializer = result
-        # msgpack is not registered, so json should be selected
-        assert subproto == "wamp.2.json"
+        # Both are registered; the first match from the client's list wins
+        assert subproto == "wamp.2.msgpack"
 
     def test_no_matching_subprotocol(self) -> None:
-        result = negotiate_subprotocol(["wamp.2.msgpack", "wamp.2.flatbuffers"])
+        result = negotiate_subprotocol(["wamp.2.flatbuffers", "wamp.2.protobuf"])
         assert result is None
 
     def test_empty_subprotocol_list(self) -> None:
