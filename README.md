@@ -1,5 +1,12 @@
 # fastapi-headless-wamp
 
+[![PyPI](https://img.shields.io/pypi/v/fastapi-headless-wamp)](https://pypi.org/project/fastapi-headless-wamp/)
+[![PyPI - Downloads](https://img.shields.io/pypi/dm/fastapi-headless-wamp)](https://pypi.org/project/fastapi-headless-wamp/)
+[![PyPI - Python Version](https://img.shields.io/pypi/pyversions/fastapi-headless-wamp)](https://pypi.org/project/fastapi-headless-wamp/)
+[![Tests](https://github.com/KSDaemon/fastapi-headless-wamp/actions/workflows/lint-and-test.yml/badge.svg)](https://github.com/KSDaemon/fastapi-headless-wamp/actions/workflows/lint-and-test.yml)
+[![License](https://img.shields.io/pypi/l/fastapi-headless-wamp)](https://github.com/KSDaemon/fastapi-headless-wamp/blob/main/LICENSE)
+[![Ruff](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/astral-sh/ruff/main/assets/badge/v2.json)](https://github.com/astral-sh/ruff)
+
 ![fastapi-headless-wamp logo](https://raw.githubusercontent.com/KSDaemon/fastapi-headless-wamp/main/misc/wamp-fast-api-logo.png)
 
 Full bidirectional [WAMP](https://wamp-proto.org/) (Web Application Messaging Protocol) RPC and PubSub 
