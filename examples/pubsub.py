@@ -14,6 +14,7 @@ import asyncio
 from typing import Any
 
 from fastapi import FastAPI
+
 from fastapi_headless_wamp import WampHub, WampService, WampSession, rpc, subscribe
 
 app = FastAPI(title="fastapi-headless-wamp PubSub Example")

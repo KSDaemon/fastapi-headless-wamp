@@ -8,6 +8,7 @@ Clients connect via WebSocket to ws://localhost:8000/ws using the
 """
 
 from fastapi import FastAPI
+
 from fastapi_headless_wamp import WampHub, WampSession
 
 app = FastAPI(title="fastapi-headless-wamp Basic RPC Example")

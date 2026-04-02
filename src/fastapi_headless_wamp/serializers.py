@@ -1,5 +1,6 @@
 """Pluggable serialization system for WAMP messages."""
 
+import contextlib
 import json
 import logging
 from datetime import date, datetime, time
@@ -247,12 +248,8 @@ def get_available_subprotocols() -> list[str]:
 
 register_serializer(JsonSerializer())
 
-try:
+with contextlib.suppress(ImportError):
     register_serializer(CborSerializer())
-except ImportError:
-    pass  # cbor2 not installed — CBOR subprotocol won't be available
 
-try:
+with contextlib.suppress(ImportError):
     register_serializer(MsgpackSerializer())
-except ImportError:
-    pass  # msgpack not installed — MsgPack subprotocol won't be available

@@ -9,6 +9,7 @@ Clients can call procedures like ``com.example.math.add``,
 """
 
 from fastapi import FastAPI
+
 from fastapi_headless_wamp import WampHub, WampService, WampSession, rpc
 
 app = FastAPI(title="fastapi-headless-wamp Class Service Example")

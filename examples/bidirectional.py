@@ -16,6 +16,7 @@ import asyncio
 import datetime
 
 from fastapi import FastAPI
+
 from fastapi_headless_wamp import WampHub, WampSession
 
 app = FastAPI(title="fastapi-headless-wamp Bidirectional RPC Example")
@@ -34,7 +35,7 @@ async def ping(session: WampSession) -> str:
 @wamp.register("com.server.time")
 async def server_time(session: WampSession) -> str:
     """Return the current server time."""
-    return datetime.datetime.now(datetime.timezone.utc).isoformat()
+    return datetime.datetime.now(datetime.UTC).isoformat()
 
 
 # --- Lifecycle callback: call client RPCs when session opens ---

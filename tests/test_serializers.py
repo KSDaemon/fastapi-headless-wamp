@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import json
 from dataclasses import dataclass
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from decimal import Decimal
 from uuid import UUID
 
@@ -222,7 +222,7 @@ class TestJsonDefaultFallback:
 
     def test_datetime(self) -> None:
         s = JsonSerializer()
-        dt = datetime(2025, 6, 15, 12, 30, 0, tzinfo=timezone.utc)
+        dt = datetime(2025, 6, 15, 12, 30, 0, tzinfo=UTC)
         msg: list[object] = [50, 1, {}, [{"ts": dt}]]
         encoded = s.encode(msg)
         decoded = json.loads(encoded)
@@ -325,7 +325,7 @@ class TestCborSerializer:
     def test_datetime_native(self) -> None:
         """CBOR preserves datetime as a native tagged value."""
         s = CborSerializer()
-        dt = datetime(2025, 6, 15, 12, 30, 0, tzinfo=timezone.utc)
+        dt = datetime(2025, 6, 15, 12, 30, 0, tzinfo=UTC)
         msg: list[object] = [50, 1, {}, [{"ts": dt}]]
         encoded = s.encode(msg)
         decoded = s.decode(encoded)
@@ -409,7 +409,7 @@ class TestMsgpackSerializer:
     def test_datetime_as_isoformat(self) -> None:
         """MsgPack converts datetime to ISO string (unlike CBOR which preserves it)."""
         s = MsgpackSerializer()
-        dt = datetime(2025, 6, 15, 12, 30, 0, tzinfo=timezone.utc)
+        dt = datetime(2025, 6, 15, 12, 30, 0, tzinfo=UTC)
         msg: list[object] = [50, 1, {}, [{"ts": dt}]]
         encoded = s.encode(msg)
         decoded = s.decode(encoded)

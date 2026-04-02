@@ -49,7 +49,7 @@ async def greet(session: WampSession, name: str) -> str:
 @wamp.register("com.example.time")
 async def server_time(session: WampSession) -> str:
     """Return the current UTC time as ISO-8601 string."""
-    now = datetime.datetime.now(datetime.timezone.utc).isoformat()
+    now = datetime.datetime.now(datetime.UTC).isoformat()
     print(f"  [server] com.example.time() -> {now!r}")
     return now
 
