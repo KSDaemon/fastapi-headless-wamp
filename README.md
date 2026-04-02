@@ -18,7 +18,7 @@ for applications that need structured bidirectional communication over WebSocket
 - **Progressive call invocations** — clients can stream input chunks to the server.
 - **Call cancellation** — cancel in-flight RPCs from either side.
 - **Class-based services** — group related RPCs and subscriptions into service classes with a URI prefix.
-- **Pluggable serialization** — JSON by default, extensible to other formats.
+- **Pluggable serialization** — JSON and CBOR built-in, extensible to other formats.
 - **Typed** — fully typed with strict linting via ruff.
 - **wampy.js compatible** — designed to work with [wampy.js](https://github.com/nicola/wampy.js) and other WAMP clients.
 
@@ -46,6 +46,12 @@ and client communicate directly within the session. This means:
 
 ```bash
 pip install fastapi-headless-wamp
+```
+
+For CBOR serialization support (binary, more compact than JSON):
+
+```bash
+pip install fastapi-headless-wamp[cbor]
 ```
 
 ## Quick Start
@@ -216,9 +222,29 @@ async def on_close(session: WampSession) -> None:
     print(f"Session {session.session_id} disconnected")
 ```
 
-## Custom Serializers
+## Serialization
 
-The default serializer is JSON. To add a custom serializer, implement the `Serializer` protocol:
+### Built-in serializers
+
+| Serializer | Subprotocol | Format | Install |
+|---|---|---|---|
+| `JsonSerializer` | `wamp.2.json` | Text (UTF-8) | included |
+| `CborSerializer` | `wamp.2.cbor` | Binary | `pip install fastapi-headless-wamp[cbor]` |
+
+Both are registered automatically at import time (CBOR only when `cbor2` is installed).
+The server advertises all available subprotocols during the WebSocket handshake and the
+client picks one.
+
+Both serializers handle **Pydantic models**, **dataclasses**, `datetime`, `Decimal`, `UUID`,
+`set`/`frozenset`, and `bytes` out of the box — RPC handlers can return these types directly
+without manual serialization.
+
+CBOR preserves native types (e.g. `datetime` stays a datetime, not a string), while JSON
+converts them to string representations.
+
+### Custom serializers
+
+To add another serializer (e.g. MsgPack), implement the `Serializer` protocol:
 
 ```python
 from fastapi_headless_wamp import Serializer, register_serializer

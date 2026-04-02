@@ -119,7 +119,7 @@ class TestSubprotocolNegotiation:
         assert subproto == "wamp.2.json"
 
     def test_no_matching_subprotocol(self) -> None:
-        result = negotiate_subprotocol(["wamp.2.msgpack", "wamp.2.cbor"])
+        result = negotiate_subprotocol(["wamp.2.msgpack", "wamp.2.flatbuffers"])
         assert result is None
 
     def test_empty_subprotocol_list(self) -> None:

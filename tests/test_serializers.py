@@ -3,11 +3,17 @@
 from __future__ import annotations
 
 import json
+from dataclasses import dataclass
+from datetime import datetime, timezone
+from decimal import Decimal
+from uuid import UUID
 
 import pytest
+from pydantic import BaseModel
 
 from fastapi_headless_wamp.serializers import (
     WAMP_SUBPROTOCOL_PREFIX,
+    CborSerializer,
     JsonSerializer,
     Serializer,
     get_available_subprotocols,
@@ -178,3 +184,157 @@ class TestSubprotocols:
         subprotocols = get_available_subprotocols()
         assert "wamp.2.msgpack" in subprotocols
         assert "wamp.2.json" in subprotocols
+
+
+# ---------------------------------------------------------------------------
+# JsonSerializer: _json_default fallback tests
+# ---------------------------------------------------------------------------
+
+
+class _SampleModel(BaseModel):
+    name: str
+    value: int
+
+
+@dataclass
+class _SampleDC:
+    x: int
+    y: str
+
+
+class TestJsonDefaultFallback:
+    """JsonSerializer handles Pydantic models, dataclasses, and common types."""
+
+    def test_pydantic_model(self) -> None:
+        s = JsonSerializer()
+        msg: list[object] = [50, 1, {}, [_SampleModel(name="test", value=42)]]
+        encoded = s.encode(msg)
+        decoded = json.loads(encoded)
+        assert decoded[3][0] == {"name": "test", "value": 42}
+
+    def test_dataclass(self) -> None:
+        s = JsonSerializer()
+        msg: list[object] = [50, 1, {}, [_SampleDC(x=10, y="hello")]]
+        encoded = s.encode(msg)
+        decoded = json.loads(encoded)
+        assert decoded[3][0] == {"x": 10, "y": "hello"}
+
+    def test_datetime(self) -> None:
+        s = JsonSerializer()
+        dt = datetime(2025, 6, 15, 12, 30, 0, tzinfo=timezone.utc)
+        msg: list[object] = [50, 1, {}, [{"ts": dt}]]
+        encoded = s.encode(msg)
+        decoded = json.loads(encoded)
+        assert decoded[3][0]["ts"] == "2025-06-15T12:30:00+00:00"
+
+    def test_decimal(self) -> None:
+        s = JsonSerializer()
+        msg: list[object] = [50, 1, {}, [{"price": Decimal("19.99")}]]
+        encoded = s.encode(msg)
+        decoded = json.loads(encoded)
+        assert decoded[3][0]["price"] == 19.99
+
+    def test_uuid(self) -> None:
+        s = JsonSerializer()
+        uid = UUID("12345678-1234-5678-1234-567812345678")
+        msg: list[object] = [50, 1, {}, [{"id": uid}]]
+        encoded = s.encode(msg)
+        decoded = json.loads(encoded)
+        assert decoded[3][0]["id"] == "12345678-1234-5678-1234-567812345678"
+
+    def test_set_and_frozenset(self) -> None:
+        s = JsonSerializer()
+        msg: list[object] = [50, 1, {}, [{"tags": frozenset(["a", "b"])}]]
+        encoded = s.encode(msg)
+        decoded = json.loads(encoded)
+        assert sorted(decoded[3][0]["tags"]) == ["a", "b"]
+
+    def test_unsupported_type_raises(self) -> None:
+        s = JsonSerializer()
+        msg: list[object] = [50, 1, {}, [{"bad": object()}]]
+        with pytest.raises(TypeError, match="not JSON serializable"):
+            s.encode(msg)
+
+
+# ---------------------------------------------------------------------------
+# CborSerializer tests
+# ---------------------------------------------------------------------------
+
+
+class TestCborSerializer:
+    def test_protocol_name(self) -> None:
+        s = CborSerializer()
+        assert s.protocol == "cbor"
+
+    def test_is_binary(self) -> None:
+        s = CborSerializer()
+        assert s.is_binary is True
+
+    def test_encode_returns_bytes(self) -> None:
+        s = CborSerializer()
+        msg: list[object] = [1, "realm1", {"roles": {"caller": {}}}]
+        encoded = s.encode(msg)
+        assert isinstance(encoded, bytes)
+
+    def test_encode_decode_roundtrip(self) -> None:
+        s = CborSerializer()
+        original: list[object] = [
+            36,
+            42,
+            100,
+            {},
+            ["hello", "world"],
+            {"key": "value"},
+        ]
+        encoded = s.encode(original)
+        decoded = s.decode(encoded)
+        assert decoded == original
+
+    def test_decode_from_bytes(self) -> None:
+        s = CborSerializer()
+        msg: list[object] = [48, 1, {}, "com.example.add", [2, 3]]
+        encoded = s.encode(msg)
+        decoded = s.decode(encoded)
+        assert decoded == msg
+
+    def test_encode_empty_message(self) -> None:
+        s = CborSerializer()
+        encoded = s.encode([])
+        decoded = s.decode(encoded)
+        assert decoded == []
+
+    def test_implements_serializer_protocol(self) -> None:
+        s = CborSerializer()
+        assert isinstance(s, Serializer)
+
+    def test_pydantic_model(self) -> None:
+        s = CborSerializer()
+        msg: list[object] = [50, 1, {}, [_SampleModel(name="test", value=42)]]
+        encoded = s.encode(msg)
+        decoded = s.decode(encoded)
+        assert decoded[3][0] == {"name": "test", "value": 42}
+
+    def test_dataclass(self) -> None:
+        s = CborSerializer()
+        msg: list[object] = [50, 1, {}, [_SampleDC(x=10, y="hello")]]
+        encoded = s.encode(msg)
+        decoded = s.decode(encoded)
+        assert decoded[3][0] == {"x": 10, "y": "hello"}
+
+    def test_datetime_native(self) -> None:
+        """CBOR preserves datetime as a native tagged value."""
+        s = CborSerializer()
+        dt = datetime(2025, 6, 15, 12, 30, 0, tzinfo=timezone.utc)
+        msg: list[object] = [50, 1, {}, [{"ts": dt}]]
+        encoded = s.encode(msg)
+        decoded = s.decode(encoded)
+        assert decoded[3][0]["ts"] == dt
+
+    def test_registered_by_default(self) -> None:
+        """CborSerializer is auto-registered when cbor2 is available."""
+        s = get_serializer("cbor")
+        assert isinstance(s, CborSerializer)
+
+    def test_available_in_subprotocols(self) -> None:
+        subprotocols = get_available_subprotocols()
+        assert "wamp.2.cbor" in subprotocols

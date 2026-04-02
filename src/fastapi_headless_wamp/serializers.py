@@ -84,6 +84,64 @@ class JsonSerializer:
 
 
 # ---------------------------------------------------------------------------
+# CBOR serializer (optional — requires ``cbor2``)
+# ---------------------------------------------------------------------------
+
+
+def _cbor_default(encoder: Any, obj: Any) -> None:
+    """Fallback for cbor2 — handles Pydantic models and dataclasses.
+
+    ``cbor2`` already natively supports ``datetime``, ``date``, ``Decimal``,
+    ``UUID``, ``set``, ``frozenset``, and ``bytes``, so only Pydantic models
+    and dataclasses need custom handling here.
+    """
+    if hasattr(obj, "model_dump"):
+        encoder.encode(obj.model_dump())
+    elif hasattr(obj, "__dataclass_fields__"):
+        encoder.encode(obj.__dict__)
+    else:
+        raise TypeError(f"Object of type {type(obj).__name__} is not CBOR serializable")
+
+
+class CborSerializer:
+    """CBOR serializer for WAMP messages (``wamp.2.cbor``).
+
+    Requires the ``cbor2`` package::
+
+        pip install fastapi-headless-wamp[cbor]
+
+    CBOR natively supports ``datetime``, ``Decimal``, ``UUID``, ``bytes``
+    and other types that JSON cannot represent without string conversion.
+    """
+
+    def __init__(self) -> None:
+        try:
+            import cbor2 as _cbor2
+        except ImportError as exc:
+            raise ImportError(
+                "cbor2 is required for CBOR serialization. Install it with: pip install fastapi-headless-wamp[cbor]"
+            ) from exc
+        self._cbor2 = _cbor2
+
+    @property
+    def protocol(self) -> str:
+        return "cbor"
+
+    @property
+    def is_binary(self) -> bool:
+        return True
+
+    def encode(self, data: list[object]) -> bytes:
+        return self._cbor2.dumps(data, default=_cbor_default)
+
+    def decode(self, data: str | bytes) -> list[object]:
+        if isinstance(data, str):
+            data = data.encode("utf-8")
+        result: list[object] = self._cbor2.loads(data)
+        return result
+
+
+# ---------------------------------------------------------------------------
 # Global serializer registry
 # ---------------------------------------------------------------------------
 
@@ -122,3 +180,8 @@ def get_available_subprotocols() -> list[str]:
 # ---------------------------------------------------------------------------
 
 register_serializer(JsonSerializer())
+
+try:
+    register_serializer(CborSerializer())
+except ImportError:
+    pass  # cbor2 not installed — CBOR subprotocol won't be available
