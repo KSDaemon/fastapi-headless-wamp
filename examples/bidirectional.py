@@ -26,13 +26,13 @@ wamp = WampHub(realm="realm1")
 
 
 @wamp.register("com.server.ping")
-async def ping() -> str:
+async def ping(session: WampSession) -> str:
     """Simple ping from client to server."""
     return "pong"
 
 
 @wamp.register("com.server.time")
-async def server_time() -> str:
+async def server_time(session: WampSession) -> str:
     """Return the current server time."""
     return datetime.datetime.now(datetime.timezone.utc).isoformat()
 

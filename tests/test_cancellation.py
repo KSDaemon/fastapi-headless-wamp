@@ -105,7 +105,7 @@ class TestCancelKillMode:
         handler_cancelled = asyncio.Event()
 
         @hub.register("com.slow")
-        async def slow_handler() -> str:
+        async def slow_handler(session: Any) -> str:
             handler_started.set()
             try:
                 await asyncio.sleep(100)
@@ -165,7 +165,7 @@ class TestCancelKillMode:
         handler_started = asyncio.Event()
 
         @hub.register("com.slow")
-        async def slow_handler() -> str:
+        async def slow_handler(session: Any) -> str:
             handler_started.set()
             await asyncio.sleep(100)
             return "done"
@@ -210,7 +210,7 @@ class TestCancelAfterCompletion:
         hub = WampHub(realm="realm1")
 
         @hub.register("com.fast")
-        async def fast_handler() -> str:
+        async def fast_handler(session: Any) -> str:
             return "quick"
 
         ws = MockWebSocket(subprotocols=["wamp.2.json"])
@@ -287,7 +287,7 @@ class TestCancelSkipMode:
         handler_finished = asyncio.Event()
 
         @hub.register("com.slow")
-        async def slow_handler() -> str:
+        async def slow_handler(session: Any) -> str:
             handler_started.set()
             await asyncio.sleep(0.3)
             handler_finished.set()
@@ -342,7 +342,7 @@ class TestCancelKillNoWaitMode:
         handler_started = asyncio.Event()
 
         @hub.register("com.slow")
-        async def slow_handler() -> str:
+        async def slow_handler(session: Any) -> str:
             handler_started.set()
             await asyncio.sleep(100)
             return "done"
@@ -384,7 +384,7 @@ class TestCancelKillNoWaitMode:
         handler_started = asyncio.Event()
 
         @hub.register("com.slow")
-        async def slow_handler() -> str:
+        async def slow_handler(session: Any) -> str:
             handler_started.set()
             await asyncio.sleep(100)
             return "done"
@@ -429,7 +429,7 @@ class TestCancelFastAPIIntegration:
         handler_started = asyncio.Event()
 
         @hub.register("com.slow")
-        async def slow_handler() -> str:
+        async def slow_handler(session: Any) -> str:
             handler_started.set()
             await asyncio.sleep(100)
             return "done"
@@ -494,7 +494,7 @@ class TestCancelEdgeCases:
         handler_started = asyncio.Event()
 
         @hub.register("com.sync_slow")
-        def sync_slow_handler() -> str:
+        def sync_slow_handler(session: Any) -> str:
             # Signal start from thread
             handler_started._loop.call_soon_threadsafe(handler_started.set)  # type: ignore[attr-defined]
 
@@ -536,13 +536,13 @@ class TestCancelEdgeCases:
         handler2_result = asyncio.Event()
 
         @hub.register("com.slow")
-        async def slow_handler() -> str:
+        async def slow_handler(session: Any) -> str:
             handler1_started.set()
             await asyncio.sleep(100)
             return "slow done"
 
         @hub.register("com.fast")
-        async def fast_handler() -> str:
+        async def fast_handler(session: Any) -> str:
             handler2_result.set()
             return "fast done"
 
@@ -616,7 +616,7 @@ class TestCancelEdgeCases:
         handler_started = asyncio.Event()
 
         @hub.register("com.slow")
-        async def slow_handler() -> str:
+        async def slow_handler(session: Any) -> str:
             handler_started.set()
             await asyncio.sleep(100)
             return "done"

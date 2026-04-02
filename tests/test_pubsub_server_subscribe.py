@@ -115,7 +115,7 @@ class TestSubscribeDecorator:
         hub = WampHub(realm="realm1")
 
         @hub.subscribe("com.example.event")
-        async def on_event() -> None:
+        async def on_event(session: Any) -> None:
             pass
 
         subs = hub._server_subscriptions
@@ -126,7 +126,7 @@ class TestSubscribeDecorator:
         """@wamp.subscribe(topic) returns the original function."""
         hub = WampHub(realm="realm1")
 
-        async def on_event() -> None:
+        async def on_event(session: Any) -> None:
             pass
 
         result = hub.subscribe("com.example.event")(on_event)
@@ -137,11 +137,11 @@ class TestSubscribeDecorator:
         hub = WampHub(realm="realm1")
 
         @hub.subscribe("com.example.event")
-        async def handler1() -> None:
+        async def handler1(session: Any) -> None:
             pass
 
         @hub.subscribe("com.example.event")
-        async def handler2() -> None:
+        async def handler2(session: Any) -> None:
             pass
 
         subs = hub._server_subscriptions
@@ -164,7 +164,7 @@ class TestHandlePublish:
         received: list[tuple[Any, ...]] = []
 
         @hub.subscribe("com.example.event")
-        async def on_event(x: int, y: int) -> None:
+        async def on_event(session: Any, x: int, y: int) -> None:
             received.append((x, y))
 
         hello: list[Any] = [WampMessageType.HELLO, "realm1", {"roles": {}}]
@@ -192,7 +192,7 @@ class TestHandlePublish:
         received_kwargs: list[dict[str, Any]] = []
 
         @hub.subscribe("com.example.event")
-        async def on_event(**kwargs: Any) -> None:
+        async def on_event(session: Any, **kwargs: Any) -> None:
             received_kwargs.append(kwargs)
 
         hello: list[Any] = [WampMessageType.HELLO, "realm1", {"roles": {}}]
@@ -212,21 +212,19 @@ class TestHandlePublish:
         await hub.handle_websocket(ws)  # type: ignore[arg-type]
 
         assert len(received_kwargs) == 1
-        # _session is injected into kwargs since handler has **kwargs
         assert received_kwargs[0]["name"] == "Alice"
         assert received_kwargs[0]["age"] == 30
 
     async def test_client_publish_handler_receives_session(self) -> None:
-        """Handler with _session parameter receives the WampSession."""
+        """Handler receives the WampSession as first positional arg."""
         hub = WampHub(realm="realm1")
         ws = MockWebSocket(subprotocols=["wamp.2.json"])
 
         received_sessions: list[WampSession] = []
 
         @hub.subscribe("com.example.event")
-        async def on_event(_session: WampSession | None = None) -> None:
-            if _session is not None:
-                received_sessions.append(_session)
+        async def on_event(session: WampSession) -> None:
+            received_sessions.append(session)
 
         hello: list[Any] = [WampMessageType.HELLO, "realm1", {"roles": {}}]
         publish: list[Any] = [
@@ -274,7 +272,7 @@ class TestHandlePublish:
         ws = MockWebSocket(subprotocols=["wamp.2.json"])
 
         @hub.subscribe("com.example.event")
-        async def on_event() -> None:
+        async def on_event(session: Any) -> None:
             pass
 
         hello: list[Any] = [WampMessageType.HELLO, "realm1", {"roles": {}}]
@@ -327,7 +325,7 @@ class TestHandlePublish:
         ws = MockWebSocket(subprotocols=["wamp.2.json"])
 
         @hub.subscribe("com.example.event")
-        async def on_event() -> None:
+        async def on_event(session: Any) -> None:
             pass
 
         hello: list[Any] = [WampMessageType.HELLO, "realm1", {"roles": {}}]
@@ -356,7 +354,7 @@ class TestHandlePublish:
         received: list[int] = []
 
         @hub.subscribe("com.example.sync_event")
-        def on_event(x: int) -> None:
+        def on_event(session: Any, x: int) -> None:
             received.append(x)
 
         hello: list[Any] = [WampMessageType.HELLO, "realm1", {"roles": {}}]
@@ -382,7 +380,7 @@ class TestHandlePublish:
         ws = MockWebSocket(subprotocols=["wamp.2.json"])
 
         @hub.subscribe("com.example.event")
-        async def on_event() -> None:
+        async def on_event(session: Any) -> None:
             raise ValueError("handler error")
 
         hello: list[Any] = [WampMessageType.HELLO, "realm1", {"roles": {}}]
@@ -410,11 +408,11 @@ class TestHandlePublish:
         results: list[str] = []
 
         @hub.subscribe("com.example.event")
-        async def handler1() -> None:
+        async def handler1(session: Any) -> None:
             results.append("handler1")
 
         @hub.subscribe("com.example.event")
-        async def handler2() -> None:
+        async def handler2(session: Any) -> None:
             results.append("handler2")
 
         hello: list[Any] = [WampMessageType.HELLO, "realm1", {"roles": {}}]
@@ -441,11 +439,11 @@ class TestHandlePublish:
         results: list[str] = []
 
         @hub.subscribe("com.example.event")
-        async def handler1() -> None:
+        async def handler1(session: Any) -> None:
             raise RuntimeError("boom")
 
         @hub.subscribe("com.example.event")
-        async def handler2() -> None:
+        async def handler2(session: Any) -> None:
             results.append("handler2")
 
         hello: list[Any] = [WampMessageType.HELLO, "realm1", {"roles": {}}]
@@ -472,7 +470,7 @@ class TestHandlePublish:
         received: list[bool] = []
 
         @hub.subscribe("com.example.event")
-        async def on_event() -> None:
+        async def on_event(session: Any) -> None:
             received.append(True)
 
         hello: list[Any] = [WampMessageType.HELLO, "realm1", {"roles": {}}]
@@ -499,7 +497,7 @@ class TestHandlePublish:
         received: list[bool] = []
 
         @hub.subscribe("com.example.event")
-        async def on_event() -> None:
+        async def on_event(session: Any) -> None:
             received.append(True)
 
         hello: list[Any] = [WampMessageType.HELLO, "realm1", {"roles": {}}]
@@ -568,7 +566,7 @@ class TestServiceSubscribe:
             prefix = "com.events"
 
             @subscribe("on_data")
-            async def handle_data(self, value: int) -> None:
+            async def handle_data(self, session: Any, value: int) -> None:
                 results.append(value)
 
         hub.register_service(EventService())
@@ -599,7 +597,7 @@ class TestServiceSubscribe:
 
         class NoPrefix(WampService):
             @subscribe("my.event")
-            async def handle_event(self, val: str) -> None:
+            async def handle_event(self, session: Any, val: str) -> None:
                 results.append(val)
 
         hub.register_service(NoPrefix())
@@ -632,7 +630,7 @@ class TestServiceSubscribe:
             prefix = "svc"
 
             @subscribe("event")
-            async def handle(self, x: int) -> None:
+            async def handle(self, session: Any, x: int) -> None:
                 results.append(x)
 
         hub.register_service(Svc())
@@ -668,7 +666,7 @@ class TestServiceSubscribe:
             prefix = "svc"
 
             @subscribe("check_hub")
-            async def handle(self) -> None:
+            async def handle(self, session: Any) -> None:
                 if self.hub is not None:
                     hub_refs.append(self.hub)
 
@@ -736,7 +734,7 @@ class TestFastAPIIntegration:
         received: list[tuple[Any, ...]] = []
 
         @hub.subscribe("com.example.event")
-        async def on_event(msg: str) -> None:
+        async def on_event(session: Any, msg: str) -> None:
             received.append((msg,))
 
         app = self._make_app(hub)
@@ -763,7 +761,7 @@ class TestFastAPIIntegration:
         hub = WampHub(realm="realm1")
 
         @hub.subscribe("com.example.event")
-        async def on_event() -> None:
+        async def on_event(session: Any) -> None:
             pass
 
         app = self._make_app(hub)
@@ -817,7 +815,7 @@ class TestFastAPIIntegration:
             prefix = "svc"
 
             @subscribe("on_data")
-            async def handle_data(self, x: int) -> None:
+            async def handle_data(self, session: Any, x: int) -> None:
                 results.append(x)
 
         hub.register_service(Svc())
@@ -869,7 +867,7 @@ class TestFastAPIIntegration:
         results: list[int] = []
 
         @hub.subscribe("com.example.counter")
-        async def on_counter(n: int) -> None:
+        async def on_counter(session: Any, n: int) -> None:
             results.append(n)
 
         app = self._make_app(hub)

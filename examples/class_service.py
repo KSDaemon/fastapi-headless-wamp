@@ -9,7 +9,7 @@ Clients can call procedures like ``com.example.math.add``,
 """
 
 from fastapi import FastAPI
-from fastapi_headless_wamp import WampHub, WampService, rpc
+from fastapi_headless_wamp import WampHub, WampService, WampSession, rpc
 
 app = FastAPI(title="fastapi-headless-wamp Class Service Example")
 wamp = WampHub(realm="realm1")
@@ -24,17 +24,17 @@ class MathService(WampService):
     prefix = "com.example.math"
 
     @rpc()
-    async def add(self, a: int, b: int) -> int:
+    async def add(self, session: WampSession, *, a: int, b: int) -> int:
         """Add two numbers. URI: com.example.math.add"""
         return a + b
 
     @rpc("multiply")
-    async def mul(self, a: int, b: int) -> int:
+    async def mul(self, session: WampSession, *, a: int, b: int) -> int:
         """Multiply two numbers. URI: com.example.math.multiply"""
         return a * b
 
     @rpc()
-    def factorial(self, n: int) -> int:
+    def factorial(self, session: WampSession, *, n: int) -> int:
         """Compute factorial (sync handler). URI: com.example.math.factorial"""
         result = 1
         for i in range(2, n + 1):
@@ -51,12 +51,12 @@ class StringService(WampService):
     prefix = "com.example.strings"
 
     @rpc()
-    async def upper(self, text: str) -> str:
+    async def upper(self, session: WampSession, *, text: str) -> str:
         """Convert to uppercase. URI: com.example.strings.upper"""
         return text.upper()
 
     @rpc()
-    async def reverse(self, text: str) -> str:
+    async def reverse(self, session: WampSession, *, text: str) -> str:
         """Reverse a string. URI: com.example.strings.reverse"""
         return text[::-1]
 

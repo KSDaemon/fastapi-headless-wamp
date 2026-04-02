@@ -75,7 +75,9 @@ class TestProgressiveResults:
 
         @hub.register("com.example.count")
         async def count(
+            session: Any,
             n: int,
+            *,
             _progress: Callable[[Any], Coroutine[Any, Any, None]] | None = None,
         ) -> str:
             for i in range(n):
@@ -121,6 +123,8 @@ class TestProgressiveResults:
 
         @hub.register("com.example.single_progress")
         async def single_progress(
+            session: Any,
+            *,
             _progress: Callable[[Any], Coroutine[Any, Any, None]] | None = None,
         ) -> str:
             if _progress is not None:
@@ -162,6 +166,8 @@ class TestProgressiveResults:
 
         @hub.register("com.example.progress_none")
         async def progress_none(
+            session: Any,
+            *,
             _progress: Callable[[Any], Coroutine[Any, Any, None]] | None = None,
         ) -> str:
             if _progress is not None:
@@ -202,6 +208,8 @@ class TestProgressiveResults:
 
         @hub.register("com.example.tracked")
         async def tracked(
+            session: Any,
+            *,
             _progress: Callable[[Any], Coroutine[Any, Any, None]] | None = None,
         ) -> str:
             if _progress is not None:
@@ -254,6 +262,8 @@ class TestNonProgressiveCall:
 
         @hub.register("com.example.check_progress")
         async def check_progress(
+            session: Any,
+            *,
             _progress: Callable[[Any], Coroutine[Any, Any, None]] | None = None,
         ) -> str:
             progress_values.append(_progress)
@@ -289,6 +299,8 @@ class TestNonProgressiveCall:
 
         @hub.register("com.example.check_progress2")
         async def check_progress2(
+            session: Any,
+            *,
             _progress: Callable[[Any], Coroutine[Any, Any, None]] | None = None,
         ) -> str:
             progress_values.append(_progress)
@@ -319,7 +331,7 @@ class TestNonProgressiveCall:
         hub = WampHub(realm="realm1")
 
         @hub.register("com.example.simple")
-        async def simple(x: int) -> int:
+        async def simple(session: Any, x: int) -> int:
             return x * 2
 
         app = _make_app(hub)
@@ -351,7 +363,7 @@ class TestNonProgressiveCall:
         hub = WampHub(realm="realm1")
 
         @hub.register("com.example.basic")
-        async def basic(x: int) -> int:
+        async def basic(session: Any, x: int) -> int:
             return x + 1
 
         app = _make_app(hub)
@@ -390,6 +402,8 @@ class TestProgressiveComplexData:
 
         @hub.register("com.example.dict_progress")
         async def dict_progress(
+            session: Any,
+            *,
             _progress: Callable[[Any], Coroutine[Any, Any, None]] | None = None,
         ) -> dict[str, Any]:
             if _progress is not None:
@@ -430,6 +444,8 @@ class TestProgressiveComplexData:
 
         @hub.register("com.example.list_progress")
         async def list_progress(
+            session: Any,
+            *,
             _progress: Callable[[Any], Coroutine[Any, Any, None]] | None = None,
         ) -> list[int]:
             if _progress is not None:

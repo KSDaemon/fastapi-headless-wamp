@@ -77,6 +77,8 @@ class TestProgressiveCallInput:
 
         @hub.register("com.example.stream")
         async def stream(
+            session: Any,
+            *,
             _input_chunks: ProgressiveCallInput | None = None,
         ) -> str:
             if _input_chunks is not None:
@@ -151,6 +153,8 @@ class TestProgressiveCallInput:
 
         @hub.register("com.example.two_chunks")
         async def two_chunks(
+            session: Any,
+            *,
             _input_chunks: ProgressiveCallInput | None = None,
         ) -> int:
             if _input_chunks is not None:
@@ -212,6 +216,8 @@ class TestProgressiveCallInput:
 
         @hub.register("com.example.kwargs_stream")
         async def kwargs_stream(
+            session: Any,
+            *,
             _input_chunks: ProgressiveCallInput | None = None,
         ) -> str:
             if _input_chunks is not None:
@@ -309,6 +315,8 @@ class TestProgressiveCallResult:
 
         @hub.register("com.example.sum_stream")
         async def sum_stream(
+            session: Any,
+            *,
             _input_chunks: ProgressiveCallInput | None = None,
         ) -> int:
             total = 0
@@ -359,6 +367,8 @@ class TestProgressiveCallResult:
 
         @hub.register("com.example.concat_stream")
         async def concat_stream(
+            session: Any,
+            *,
             _input_chunks: ProgressiveCallInput | None = None,
         ) -> str:
             parts: list[str] = []
@@ -423,7 +433,7 @@ class TestRegularCallStillWorks:
         hub = WampHub(realm="realm1")
 
         @hub.register("com.example.add")
-        async def add(a: int, b: int) -> int:
+        async def add(session: Any, a: int, b: int) -> int:
             return a + b
 
         app = _make_app(hub)
@@ -453,7 +463,7 @@ class TestRegularCallStillWorks:
         hub = WampHub(realm="realm1")
 
         @hub.register("com.example.multiply")
-        async def multiply(a: int, b: int) -> int:
+        async def multiply(session: Any, a: int, b: int) -> int:
             return a * b
 
         app = _make_app(hub)
@@ -548,6 +558,8 @@ class TestProgressiveInputEdgeCases:
 
         @hub.register("com.example.count_chunks")
         async def count_chunks(
+            session: Any,
+            *,
             _input_chunks: ProgressiveCallInput | None = None,
         ) -> int:
             nonlocal chunk_count
@@ -603,6 +615,8 @@ class TestProgressiveInputEdgeCases:
 
         @hub.register("com.example.delayed_result")
         async def delayed_result(
+            session: Any,
+            *,
             _input_chunks: ProgressiveCallInput | None = None,
         ) -> str:
             items: list[str] = []

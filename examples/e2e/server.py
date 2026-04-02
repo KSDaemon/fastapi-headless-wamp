@@ -16,6 +16,7 @@ script (client.mjs) to exercise:
 
 import asyncio
 import datetime
+from typing import Any
 
 from fastapi import FastAPI
 
@@ -31,14 +32,14 @@ wamp = WampHub(realm="realm1")
 
 
 @wamp.register("com.example.add")
-async def add(a: int, b: int) -> int:
+async def add(session: WampSession, a: int, b: int) -> int:
     """Add two numbers and return the result."""
     print(f"  [server] com.example.add({a}, {b}) -> {a + b}")
     return a + b
 
 
 @wamp.register("com.example.greet")
-async def greet(name: str) -> str:
+async def greet(session: WampSession, name: str) -> str:
     """Return a personalised greeting."""
     result = f"Hello, {name}!"
     print(f"  [server] com.example.greet({name!r}) -> {result!r}")
@@ -46,7 +47,7 @@ async def greet(name: str) -> str:
 
 
 @wamp.register("com.example.time")
-async def server_time() -> str:
+async def server_time(session: WampSession) -> str:
     """Return the current UTC time as ISO-8601 string."""
     now = datetime.datetime.now(datetime.timezone.utc).isoformat()
     print(f"  [server] com.example.time() -> {now!r}")
@@ -68,7 +69,7 @@ class EchoService(WampService):
         self._call_count = 0
 
     @rpc("reverse")
-    async def reverse(self, text: str) -> str:
+    async def reverse(self, session: WampSession, *, text: str) -> str:
         """Return the reversed text."""
         self._call_count += 1
         result = text[::-1]
@@ -76,25 +77,25 @@ class EchoService(WampService):
         return result
 
     @rpc("stats")
-    async def stats(self) -> dict[str, int]:
+    async def stats(self, session: WampSession) -> dict[str, int]:
         """Return call statistics."""
         return {"total_calls": self._call_count}
 
     @subscribe("shout")
     async def on_shout(
         self,
-        text: str,
-        _session: WampSession | None = None,
+        session: WampSession,
+        *args: Any,
+        **kwargs: Any,
     ) -> None:
         """When a client publishes to ``com.example.echo.shout``,
         the server uppercases the text and re-publishes it to
         ``com.example.echo.loud`` for all connected sessions.
         """
-        sender = _session.session_id if _session else "unknown"
+        text = args[0] if args else kwargs.get("text", "")
+        sender = session.session_id
         loud = text.upper()
-        print(
-            f"  [server] com.example.echo.shout from {sender}: {text!r} -> broadcasting {loud!r}"
-        )
+        print(f"  [server] com.example.echo.shout from {sender}: {text!r} -> broadcasting {loud!r}")
 
         if self.hub is not None:
             await self.hub.publish_to_all(
@@ -114,11 +115,13 @@ wamp.register_service(EchoService())
 
 @wamp.subscribe("com.example.ping")
 async def on_ping(
-    message: str = "ping",
-    _session: WampSession | None = None,
+    session: WampSession,
+    *args: Any,
+    **kwargs: Any,
 ) -> None:
     """React to client pings by publishing a pong to all sessions."""
-    sender = _session.session_id if _session else "unknown"
+    message = args[0] if args else kwargs.get("message", "ping")
+    sender = session.session_id
     print(f"  [server] com.example.ping from {sender}: {message!r}")
 
     await wamp.publish_to_all(

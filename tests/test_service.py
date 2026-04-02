@@ -73,15 +73,15 @@ class MathService(WampService):
     prefix = "com.example.math"
 
     @rpc()
-    async def add(self, a: int, b: int) -> int:
+    async def add(self, session: Any, a: int, b: int) -> int:
         return a + b
 
     @rpc("multiply")
-    async def mul(self, a: int, b: int) -> int:
+    async def mul(self, session: Any, a: int, b: int) -> int:
         return a * b
 
     @rpc()
-    def subtract(self, a: int, b: int) -> int:
+    def subtract(self, session: Any, a: int, b: int) -> int:
         """Sync method — should run via asyncio.to_thread."""
         return a - b
 
@@ -90,11 +90,11 @@ class NoPrefixService(WampService):
     """Service with no prefix; URI is just the method name or explicit URI."""
 
     @rpc("greet")
-    async def greet(self, name: str) -> str:
+    async def greet(self, session: Any, name: str) -> str:
         return f"hello {name}"
 
     @rpc()
-    async def echo(self, value: Any) -> Any:
+    async def echo(self, session: Any, value: Any) -> Any:
         return value
 
 
@@ -104,7 +104,7 @@ class HubAccessService(WampService):
     prefix = "com.example.hub"
 
     @rpc()
-    async def session_count(self) -> int:
+    async def session_count(self, session: Any) -> int:
         if self.hub is None:
             return -1
         return self.hub.session_count
@@ -116,7 +116,7 @@ class FailingService(WampService):
     prefix = "com.example.fail"
 
     @rpc()
-    async def boom(self) -> None:
+    async def boom(self, session: Any) -> None:
         raise RuntimeError("kaboom")
 
 

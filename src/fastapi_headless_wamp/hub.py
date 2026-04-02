@@ -109,15 +109,14 @@ class WampHub:
         """Decorator to register a function as a server-side subscription handler.
 
         When a WAMP client sends a PUBLISH message on *topic*, the decorated
-        handler is invoked with the event args/kwargs and the session.
+        handler is invoked with the caller's :class:`WampSession` as the
+        first positional argument followed by the event args/kwargs.
 
         Usage::
 
             @wamp.subscribe("com.example.event")
-            async def on_event(
-                *args: Any, _session: WampSession | None = None, **kwargs: Any
-            ) -> None:
-                print(f"Event received: {args}, {kwargs}")
+            async def on_event(session: WampSession, *args: Any, **kwargs: Any) -> None:
+                print(f"Event from session {session.session_id}: {args}, {kwargs}")
 
         Both ``async def`` and regular ``def`` functions are supported.
         Sync functions are automatically run via :func:`asyncio.to_thread`.
@@ -408,10 +407,9 @@ class WampHub:
         """
         try:
             # For progressive input handlers, only inject special kwargs
-            # (not the CALL data kwargs — those come via the iterator)
+            # (not the CALL data kwargs — those come via the iterator).
+            # The session is always the first positional argument.
             caller_kwargs: dict[str, Any] = {}
-            if options.get("disclose_me"):
-                caller_kwargs["_caller_session_id"] = session.session_id
 
             # Progressive call results: also support _progress for output
             receive_progress = bool(options.get("receive_progress"))
@@ -450,9 +448,9 @@ class WampHub:
                 timeout_s = timeout_ms / 1000.0
 
             if inspect.iscoroutinefunction(handler):
-                coro = handler(**caller_kwargs)
+                coro = handler(session, **caller_kwargs)
             else:
-                coro = asyncio.to_thread(handler, **caller_kwargs)
+                coro = asyncio.to_thread(handler, session, **caller_kwargs)
 
             if timeout_s is not None:
                 result = await asyncio.wait_for(coro, timeout=timeout_s)
@@ -537,13 +535,11 @@ class WampHub:
     ) -> None:
         """Invoke a regular (non-progressive-input) RPC handler.
 
-        Handles caller_identification, progressive call results,
-        timeout, and error handling.
+        The caller's :class:`WampSession` is always passed as the first
+        positional argument.  Handles progressive call results, timeout,
+        and error handling.
         """
-        # caller_identification: pass caller session ID if disclose_me is set
         caller_kwargs = dict(call_kwargs)
-        if options.get("disclose_me"):
-            caller_kwargs["_caller_session_id"] = session.session_id
 
         # Progressive call results support
         receive_progress = bool(options.get("receive_progress"))
@@ -577,13 +573,13 @@ class WampHub:
         if timeout_ms is not None and isinstance(timeout_ms, (int, float)) and timeout_ms > 0:
             timeout_s = timeout_ms / 1000.0
 
-        # Invoke handler
+        # Invoke handler — session is always the first positional argument
         try:
             if inspect.iscoroutinefunction(handler):
-                coro = handler(*call_args, **caller_kwargs)
+                coro = handler(session, *call_args, **caller_kwargs)
             else:
                 # Sync handler: run in thread
-                coro = asyncio.to_thread(handler, *call_args, **caller_kwargs)
+                coro = asyncio.to_thread(handler, session, *call_args, **caller_kwargs)
 
             if timeout_s is not None:
                 result = await asyncio.wait_for(coro, timeout=timeout_s)
@@ -1005,21 +1001,13 @@ class WampHub:
         if handlers:
             for handler in handlers:
                 try:
-                    # Build kwargs for the handler
                     handler_kwargs = dict(pub_kwargs)
 
-                    # Check if handler accepts _session parameter
-                    sig = inspect.signature(handler)
-                    handler_accepts_session = "_session" in sig.parameters or any(
-                        p.kind == inspect.Parameter.VAR_KEYWORD for p in sig.parameters.values()
-                    )
-                    if handler_accepts_session:
-                        handler_kwargs["_session"] = session
-
+                    # Session is always the first positional argument
                     if inspect.iscoroutinefunction(handler):
-                        await handler(*pub_args, **handler_kwargs)
+                        await handler(session, *pub_args, **handler_kwargs)
                     else:
-                        await asyncio.to_thread(handler, *pub_args, **handler_kwargs)
+                        await asyncio.to_thread(handler, session, *pub_args, **handler_kwargs)
                 except Exception as exc:
                     logger.error(
                         "Session %d: server subscription handler for '%s' raised: %s",

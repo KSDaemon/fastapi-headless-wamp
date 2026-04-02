@@ -19,12 +19,12 @@ def rpc(uri: str | None = None) -> Callable[..., Any]:
     Usage::
 
         @rpc("my_procedure")
-        async def my_handler(self, x: int) -> int:
+        async def my_handler(self, session: WampSession, *, x: int) -> int:
             return x * 2
 
 
         @rpc()  # URI inferred from method name
-        async def another_handler(self) -> str:
+        async def another_handler(self, session: WampSession) -> str:
             return "hello"
 
     The full URI is constructed as ``prefix + '.' + uri`` (or
@@ -61,11 +61,11 @@ class WampService:
             prefix = "com.example.math"
 
             @rpc()
-            async def add(self, a: int, b: int) -> int:
+            async def add(self, session: WampSession, *, a: int, b: int) -> int:
                 return a + b
 
             @rpc("multiply")
-            async def mul(self, a: int, b: int) -> int:
+            async def mul(self, session: WampSession, *, a: int, b: int) -> int:
                 return a * b
 
 

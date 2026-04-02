@@ -25,32 +25,35 @@ wamp = WampHub(realm="realm1")
 
 @wamp.subscribe("com.chat.message")
 async def on_chat_message(
-    text: str,
-    _session: WampSession | None = None,
+    session: WampSession,
+    *args: Any,
+    **kwargs: Any,
 ) -> None:
     """Handle chat messages published by clients.
 
-    The ``_session`` parameter is automatically injected with the
-    publishing client's session when the handler signature accepts it.
+    The ``session`` parameter is always passed as the first positional
+    argument, providing access to the publishing client's session.
     """
-    sender = _session.session_id if _session else "unknown"
+    text = args[0] if args else kwargs.get("text", "")
+    sender = session.session_id
     print(f"[Chat] Session {sender}: {text}")
 
     # Re-broadcast the message to all other connected clients
-    if _session is not None:
-        await wamp.publish_to_all(
-            "com.chat.message",
-            args=[text],
-            kwargs={"sender": sender},
-        )
+    await wamp.publish_to_all(
+        "com.chat.message",
+        args=[text],
+        kwargs={"sender": sender},
+    )
 
 
 @wamp.subscribe("com.telemetry.report")
 async def on_telemetry(
+    session: WampSession,
+    *args: Any,
     **kwargs: Any,
 ) -> None:
     """Handle telemetry data published by clients."""
-    print(f"[Telemetry] Received: {kwargs}")
+    print(f"[Telemetry] Received from {session.session_id}: {kwargs}")
 
 
 # --- Class-based subscription handler ---
@@ -64,19 +67,21 @@ class NotificationService(WampService):
     @subscribe("new")
     async def on_new_notification(
         self,
-        title: str,
-        body: str,
-        _session: WampSession | None = None,
+        session: WampSession,
+        *args: Any,
+        **kwargs: Any,
     ) -> None:
         """Handle new notification events from clients.
 
         Full topic: ``com.notifications.new``
         """
-        sender = _session.session_id if _session else "unknown"
+        title = kwargs.get("title", args[0] if len(args) > 0 else "")
+        body = kwargs.get("body", args[1] if len(args) > 1 else "")
+        sender = session.session_id
         print(f"[Notification] From session {sender}: {title} - {body}")
 
     @rpc()
-    async def send_to_all(self, title: str, body: str) -> int:
+    async def send_to_all(self, session: WampSession, *, title: str, body: str) -> int:
         """RPC to broadcast a notification to all connected clients.
 
         Returns the number of active sessions.

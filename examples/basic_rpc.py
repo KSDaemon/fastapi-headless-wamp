@@ -8,7 +8,7 @@ Clients connect via WebSocket to ws://localhost:8000/ws using the
 """
 
 from fastapi import FastAPI
-from fastapi_headless_wamp import WampHub
+from fastapi_headless_wamp import WampHub, WampSession
 
 app = FastAPI(title="fastapi-headless-wamp Basic RPC Example")
 wamp = WampHub(realm="realm1")
@@ -18,13 +18,13 @@ wamp = WampHub(realm="realm1")
 
 
 @wamp.register("com.example.add")
-async def add(a: int, b: int) -> int:
+async def add(session: WampSession, a: int, b: int) -> int:
     """Add two numbers."""
     return a + b
 
 
 @wamp.register("com.example.greet")
-async def greet(name: str) -> str:
+async def greet(session: WampSession, name: str) -> str:
     """Return a greeting for the given name."""
     return f"Hello, {name}!"
 
@@ -33,7 +33,7 @@ async def greet(name: str) -> str:
 
 
 @wamp.register("com.example.fibonacci")
-def fibonacci(n: int) -> int:
+def fibonacci(session: WampSession, n: int) -> int:
     """Compute the n-th Fibonacci number (sync)."""
     a, b = 0, 1
     for _ in range(n):

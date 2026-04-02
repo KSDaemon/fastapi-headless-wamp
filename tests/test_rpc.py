@@ -8,7 +8,7 @@ Covers:
 - CALL for non-existent URI sends ERROR with wamp.error.no_such_procedure
 - Request IDs correctly matched in RESULT/ERROR
 - call_timeout: server cancels handler after timeout and sends ERROR wamp.error.canceled
-- caller_identification: disclose_me in CALL options passes caller session ID
+- caller_identification: session is always passed as first positional arg to handler
 """
 
 from __future__ import annotations
@@ -134,7 +134,7 @@ class TestRegisterDecorator:
         hub = WampHub(realm="realm1")
 
         @hub.register("com.example.add")
-        async def add(a: int, b: int) -> int:
+        async def add(session: Any, a: int, b: int) -> int:
             return a + b
 
         # Access via internal dict (cast to Any for test introspection)
@@ -146,11 +146,11 @@ class TestRegisterDecorator:
         hub = WampHub(realm="realm1")
 
         @hub.register("com.example.add")
-        async def add(a: int, b: int) -> int:
+        async def add(session: Any, a: int, b: int) -> int:
             return a + b
 
         @hub.register("com.example.mul")
-        async def mul(a: int, b: int) -> int:
+        async def mul(session: Any, a: int, b: int) -> int:
             return a * b
 
         rpcs: dict[str, Any] = hub._server_rpcs
@@ -162,7 +162,7 @@ class TestRegisterDecorator:
         hub = WampHub(realm="realm1")
 
         @hub.register("com.example.greet")
-        async def greet(name: str) -> str:
+        async def greet(session: Any, name: str) -> str:
             return f"hello {name}"
 
         # The decorator should return the function unchanged
@@ -172,7 +172,7 @@ class TestRegisterDecorator:
         hub = WampHub(realm="realm1")
 
         @hub.register("com.example.sync_add")
-        def sync_add(a: int, b: int) -> int:
+        def sync_add(session: Any, a: int, b: int) -> int:
             return a + b
 
         rpcs: dict[str, Any] = hub._server_rpcs
@@ -191,7 +191,7 @@ class TestCallSuccess:
         hub = WampHub(realm="realm1")
 
         @hub.register("com.example.add")
-        async def add(a: int, b: int) -> int:
+        async def add(session: Any, a: int, b: int) -> int:
             return a + b
 
         app = _make_app(hub)
@@ -222,7 +222,7 @@ class TestCallSuccess:
         hub = WampHub(realm="realm1")
 
         @hub.register("com.example.greet")
-        async def greet(name: str, greeting: str = "hello") -> str:
+        async def greet(session: Any, name: str, greeting: str = "hello") -> str:
             return f"{greeting} {name}"
 
         app = _make_app(hub)
@@ -251,7 +251,7 @@ class TestCallSuccess:
         hub = WampHub(realm="realm1")
 
         @hub.register("com.example.noop")
-        async def noop() -> None:
+        async def noop(session: Any) -> None:
             pass
 
         app = _make_app(hub)
@@ -275,7 +275,7 @@ class TestCallSuccess:
         hub = WampHub(realm="realm1")
 
         @hub.register("com.example.echo")
-        async def echo(val: Any) -> Any:
+        async def echo(session: Any, val: Any) -> Any:
             return val
 
         app = _make_app(hub)
@@ -312,7 +312,7 @@ class TestSyncHandler:
         hub = WampHub(realm="realm1")
 
         @hub.register("com.example.sync_add")
-        def sync_add(a: int, b: int) -> int:
+        def sync_add(session: Any, a: int, b: int) -> int:
             return a + b
 
         app = _make_app(hub)
@@ -340,7 +340,7 @@ class TestSyncHandler:
         hub = WampHub(realm="realm1")
 
         @hub.register("com.example.sync_fail")
-        def sync_fail() -> None:
+        def sync_fail(session: Any) -> None:
             raise ValueError("sync boom")
 
         app = _make_app(hub)
@@ -376,7 +376,7 @@ class TestExceptionHandling:
         hub = WampHub(realm="realm1")
 
         @hub.register("com.example.fail")
-        async def fail() -> None:
+        async def fail(session: Any) -> None:
             raise RuntimeError("something went wrong")
 
         app = _make_app(hub)
@@ -403,7 +403,7 @@ class TestExceptionHandling:
         hub = WampHub(realm="realm1")
 
         @hub.register("com.example.wamp_err")
-        async def wamp_err() -> None:
+        async def wamp_err(session: Any) -> None:
             raise WampNoSuchProcedureError("custom message")
 
         app = _make_app(hub)
@@ -431,7 +431,7 @@ class TestExceptionHandling:
         hub = WampHub(realm="realm1")
 
         @hub.register("com.example.wamp_err_payload")
-        async def wamp_err_payload() -> None:
+        async def wamp_err_payload(session: Any) -> None:
             raise WampNoSuchProcedureError(
                 "not found",
                 args=["extra_arg"],
@@ -506,7 +506,7 @@ class TestCallTimeout:
         hub = WampHub(realm="realm1")
 
         @hub.register("com.example.slow")
-        async def slow() -> str:
+        async def slow(session: Any) -> str:
             await asyncio.sleep(10)
             return "done"
 
@@ -537,7 +537,7 @@ class TestCallTimeout:
         hub = WampHub(realm="realm1")
 
         @hub.register("com.example.fast")
-        async def fast() -> str:
+        async def fast(session: Any) -> str:
             return "quick"
 
         app = _make_app(hub)
@@ -565,7 +565,7 @@ class TestCallTimeout:
         hub = WampHub(realm="realm1")
 
         @hub.register("com.example.ok")
-        async def ok() -> str:
+        async def ok(session: Any) -> str:
             return "ok"
 
         app = _make_app(hub)
@@ -594,16 +594,16 @@ class TestCallTimeout:
 
 
 class TestCallerIdentification:
-    """disclose_me in CALL options passes caller session ID."""
+    """Session is always passed as first positional arg to handler."""
 
-    def test_disclose_me_passes_session_id(self) -> None:
+    def test_session_id_available_via_session(self) -> None:
         hub = WampHub(realm="realm1")
         received_caller_id: list[int] = []
 
         @hub.register("com.example.who_am_i")
-        async def who_am_i(_caller_session_id: int = 0) -> int:
-            received_caller_id.append(_caller_session_id)
-            return _caller_session_id
+        async def who_am_i(session: Any) -> int:
+            received_caller_id.append(session.session_id)
+            return session.session_id
 
         app = _make_app(hub)
         with TestClient(app) as client:
@@ -613,7 +613,7 @@ class TestCallerIdentification:
                 call: list[Any] = [
                     WampMessageType.CALL,
                     30,
-                    {"disclose_me": True},
+                    {},
                     "com.example.who_am_i",
                 ]
                 ws.send_json(call)
@@ -626,25 +626,25 @@ class TestCallerIdentification:
 
                 _send_goodbye(ws)
 
-    def test_no_disclose_me_no_caller_id(self) -> None:
-        """Without disclose_me, _caller_session_id is not passed."""
+    def test_session_always_passed(self) -> None:
+        """Session is always passed as first arg, even without disclose_me."""
         hub = WampHub(realm="realm1")
         received_caller_id: list[int] = []
 
         @hub.register("com.example.who_am_i2")
-        async def who_am_i2(_caller_session_id: int = 0) -> int:
-            received_caller_id.append(_caller_session_id)
-            return _caller_session_id
+        async def who_am_i2(session: Any) -> int:
+            received_caller_id.append(session.session_id)
+            return session.session_id
 
         app = _make_app(hub)
         with TestClient(app) as client:
             with client.websocket_connect("/ws", subprotocols=["wamp.2.json"]) as ws:
-                _do_handshake(ws)
+                session_id = _do_handshake(ws)
 
                 call: list[Any] = [
                     WampMessageType.CALL,
                     31,
-                    {},  # no disclose_me
+                    {},
                     "com.example.who_am_i2",
                 ]
                 ws.send_json(call)
@@ -652,9 +652,9 @@ class TestCallerIdentification:
                 result: list[Any] = ws.receive_json()
                 assert result[0] == WampMessageType.RESULT
                 assert result[1] == 31
-                # Default value 0 used
-                assert result[3] == [0]
-                assert received_caller_id[0] == 0
+                # Session is always available
+                assert result[3] == [session_id]
+                assert received_caller_id[0] == session_id
 
                 _send_goodbye(ws)
 
@@ -671,7 +671,7 @@ class TestMultipleCalls:
         hub = WampHub(realm="realm1")
 
         @hub.register("com.example.double")
-        async def double(x: int) -> int:
+        async def double(session: Any, x: int) -> int:
             return x * 2
 
         app = _make_app(hub)
@@ -700,7 +700,7 @@ class TestMultipleCalls:
         hub = WampHub(realm="realm1")
 
         @hub.register("com.example.div")
-        async def div(a: int, b: int) -> float:
+        async def div(session: Any, a: int, b: int) -> float:
             return a / b
 
         app = _make_app(hub)
@@ -763,7 +763,7 @@ class TestCallHandlerUnit:
         hub = WampHub(realm="realm1")
 
         @hub.register("com.example.add")
-        async def add(a: int, b: int) -> int:
+        async def add(session: Any, a: int, b: int) -> int:
             return a + b
 
         ws = MockWebSocket(subprotocols=["wamp.2.json"])

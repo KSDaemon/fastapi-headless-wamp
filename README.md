@@ -54,14 +54,14 @@ pip install fastapi-headless-wamp
 
 ```python
 from fastapi import FastAPI
-from fastapi_headless_wamp import WampHub
+from fastapi_headless_wamp import WampHub, WampSession
 
 app = FastAPI()
 wamp = WampHub(realm="realm1")
 
 # Register a server-side RPC
 @wamp.register("com.example.add")
-async def add(a: int, b: int) -> int:
+async def add(session: WampSession, a: int, b: int) -> int:
     return a + b
 
 # Mount the WAMP WebSocket endpoint
@@ -81,7 +81,7 @@ can call `com.example.add`.
 
 ```python
 from fastapi import FastAPI
-from fastapi_headless_wamp import WampHub, WampService, rpc
+from fastapi_headless_wamp import WampHub, WampService, WampSession, rpc
 
 app = FastAPI()
 wamp = WampHub(realm="realm1")
@@ -90,11 +90,11 @@ class MathService(WampService):
     prefix = "com.example.math"
 
     @rpc()
-    async def add(self, a: int, b: int) -> int:
+    async def add(self, session: WampSession, *, a: int, b: int) -> int:
         return a + b
 
     @rpc("multiply")
-    async def mul(self, a: int, b: int) -> int:
+    async def mul(self, session: WampSession, *, a: int, b: int) -> int:
         return a * b
 
 wamp.register_service(MathService())
@@ -109,13 +109,13 @@ If you need more control, use `handle_websocket` directly:
 
 ```python
 from fastapi import FastAPI, WebSocket
-from fastapi_headless_wamp import WampHub
+from fastapi_headless_wamp import WampHub, WampSession
 
 app = FastAPI()
 wamp = WampHub(realm="realm1")
 
 @wamp.register("com.example.greet")
-async def greet(name: str) -> str:
+async def greet(session: WampSession, name: str) -> str:
     return f"Hello, {name}!"
 
 @app.websocket("/ws")
@@ -157,8 +157,9 @@ async def on_open(session: WampSession) -> None:
 
 ```python
 @wamp.subscribe("com.example.chat")
-async def on_chat(message: str, _session: WampSession | None = None) -> None:
-    print(f"Chat from session {_session.session_id if _session else '?'}: {message}")
+async def on_chat(session: WampSession, *args, **kwargs) -> None:
+    message = args[0] if args else kwargs.get("message", "")
+    print(f"Chat from session {session.session_id}: {message}")
 ```
 
 ## Progressive Results
@@ -171,6 +172,7 @@ from collections.abc import Awaitable, Callable
 
 @wamp.register("com.example.long_task")
 async def long_task(
+    session: WampSession,
     n: int,
     _progress: Callable[[Any], Awaitable[None]] | None = None,
 ) -> str:
