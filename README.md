@@ -25,7 +25,7 @@ for applications that need structured bidirectional communication over WebSocket
 - **Progressive call invocations** — clients can stream input chunks to the server.
 - **Call cancellation** — cancel in-flight RPCs from either side.
 - **Class-based services** — group related RPCs and subscriptions into service classes with a URI prefix.
-- **Pluggable serialization** — JSON and CBOR built-in, extensible to other formats.
+- **Pluggable serialization** — JSON, CBOR and MsgPack built-in, extensible to other formats.
 - **Typed** — fully typed with strict linting via ruff.
 - **wampy.js compatible** — designed to work with [wampy.js](https://github.com/KSDaemon/wampy.js) and other WAMP clients.
 
@@ -240,45 +240,46 @@ async def on_close(session: WampSession) -> None:
 | `CborSerializer` | `wamp.2.cbor` | Binary | `pip install fastapi-headless-wamp[cbor]` |
 | `MsgpackSerializer` | `wamp.2.msgpack` | Binary | `pip install fastapi-headless-wamp[msgpack]` |
 
-Both are registered automatically at import time (CBOR only when `cbor2` is installed).
+All are registered automatically at import time (CBOR only when `cbor2` is installed, MsgPack only when
+`msgpack` is installed).
 The server advertises all available subprotocols during the WebSocket handshake and the
 client picks one.
 
-Both serializers handle **Pydantic models**, **dataclasses**, `datetime`, `Decimal`, `UUID`,
+All serializers handle **Pydantic models**, **dataclasses**, `datetime`, `Decimal`, `UUID`,
 `set`/`frozenset`, and `bytes` out of the box — RPC handlers can return these types directly
 without manual serialization.
 
-CBOR preserves native types (e.g. `datetime` stays a datetime, not a string), while JSON
-converts them to string representations.
+CBOR preserves native types (e.g. `datetime` stays a datetime, not a string), while JSON and MsgPack
+convert them to string representations. MsgPack and CBOR both carry `bytes` natively.
 
 ### Custom serializers
 
-To add another serializer (e.g. MsgPack), implement the `Serializer` protocol:
+To add another serializer (e.g. UBJSON), implement the `Serializer` protocol:
 
 ```python
 from fastapi_headless_wamp import Serializer, register_serializer
 
-class MsgpackSerializer:
+class UbjsonSerializer:
     @property
     def protocol(self) -> str:
-        return "msgpack"
+        return "ubjson"
 
     @property
     def is_binary(self) -> bool:
         return True
 
     def encode(self, data: list) -> bytes:
-        import msgpack
-        return msgpack.packb(data)
+        import ubjson
+        return ubjson.dumpb(data)
 
     def decode(self, data: str | bytes) -> list:
-        import msgpack
-        return msgpack.unpackb(data, raw=False)
+        import ubjson
+        return ubjson.loadb(data)
 
-register_serializer(MsgpackSerializer())
+register_serializer(UbjsonSerializer())
 ```
 
-Clients can then connect with the `wamp.2.msgpack` subprotocol.
+Clients can then connect with the `wamp.2.ubjson` subprotocol.
 
 ## Clients Compatibility
 
