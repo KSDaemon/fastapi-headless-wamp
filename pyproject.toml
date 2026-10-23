@@ -41,7 +41,7 @@ Repository = "https://github.com/KSDaemon/fastapi-headless-wamp"
 [dependency-groups]
 dev = [
     "cbor2>=5.6",
-    "httpx>=0.27",
+    "httpx2>=2.16",
     "msgpack>=1.0",
     "pytest>=8.0",
     "pytest-asyncio>=0.24",

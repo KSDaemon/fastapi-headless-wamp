@@ -64,6 +64,7 @@ ignore = [
     "ANN401",    # any-type (WAMP protocol requires Any for dynamic message payloads)
     "PLR2004",   # magic-value-comparison (WAMP protocol codes are inherently magic numbers)
     "PLR0913",   # too-many-arguments (WAMP messages have many fields by spec)
+    "PLR0917",   # too-many-positional-arguments (public API like session.call(uri, args, kwargs, timeout) is positional)
     "S311",      # suspicious-non-cryptographic-random-usage (session IDs don't need crypto random)
 ]
 

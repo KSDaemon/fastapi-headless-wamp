@@ -73,10 +73,12 @@ from fastapi_headless_wamp import WampHub, WampSession
 app = FastAPI()
 wamp = WampHub(realm="realm1")
 
+
 # Register a server-side RPC
 @wamp.register("com.example.add")
 async def add(session: WampSession, a: int, b: int) -> int:
     return a + b
+
 
 # Mount the WAMP WebSocket endpoint
 app.include_router(wamp.get_router(path="/ws"))
@@ -100,6 +102,7 @@ from fastapi_headless_wamp import WampHub, WampService, WampSession, rpc
 app = FastAPI()
 wamp = WampHub(realm="realm1")
 
+
 class MathService(WampService):
     prefix = "com.example.math"
 
@@ -110,6 +113,7 @@ class MathService(WampService):
     @rpc("multiply")
     async def mul(self, session: WampSession, *, a: int, b: int) -> int:
         return a * b
+
 
 wamp.register_service(MathService())
 app.include_router(wamp.get_router(path="/ws"))
@@ -128,9 +132,11 @@ from fastapi_headless_wamp import WampHub, WampSession
 app = FastAPI()
 wamp = WampHub(realm="realm1")
 
+
 @wamp.register("com.example.greet")
 async def greet(session: WampSession, name: str) -> str:
     return f"Hello, {name}!"
+
 
 @app.websocket("/ws")
 async def websocket_endpoint(websocket: WebSocket) -> None:
@@ -145,6 +151,7 @@ The server can call RPCs that clients have registered on their session:
 from fastapi_headless_wamp import WampHub, WampSession
 
 wamp = WampHub(realm="realm1")
+
 
 @wamp.on_session_open
 async def on_open(session: WampSession) -> None:
@@ -184,6 +191,7 @@ Server RPC handlers can stream intermediate results:
 from typing import Any
 from collections.abc import Awaitable, Callable
 
+
 @wamp.register("com.example.long_task")
 async def long_task(
     session: WampSession,
@@ -213,6 +221,7 @@ The server can also cancel calls to clients:
 async def on_open(session: WampSession) -> None:
     # Start a call, then cancel it
     import asyncio
+
     task = asyncio.create_task(session.call("com.client.slow_op"))
     await asyncio.sleep(1)
     await session.cancel(1)  # cancel by request ID
@@ -224,6 +233,7 @@ async def on_open(session: WampSession) -> None:
 @wamp.on_session_open
 async def on_open(session: WampSession) -> None:
     print(f"Session {session.session_id} connected")
+
 
 @wamp.on_session_close
 async def on_close(session: WampSession) -> None:
@@ -259,6 +269,7 @@ To add another serializer (e.g. UBJSON), implement the `Serializer` protocol:
 ```python
 from fastapi_headless_wamp import Serializer, register_serializer
 
+
 class UbjsonSerializer:
     @property
     def protocol(self) -> str:
@@ -270,11 +281,14 @@ class UbjsonSerializer:
 
     def encode(self, data: list) -> bytes:
         import ubjson
+
         return ubjson.dumpb(data)
 
     def decode(self, data: str | bytes) -> list:
         import ubjson
+
         return ubjson.loadb(data)
+
 
 register_serializer(UbjsonSerializer())
 ```
