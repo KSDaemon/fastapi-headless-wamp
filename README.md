@@ -27,7 +27,7 @@ for applications that need structured bidirectional communication over WebSocket
 - **Class-based services** — group related RPCs and subscriptions into service classes with a URI prefix.
 - **Pluggable serialization** — JSON and CBOR built-in, extensible to other formats.
 - **Typed** — fully typed with strict linting via ruff.
-- **wampy.js compatible** — designed to work with [wampy.js](https://github.com/nicola/wampy.js) and other WAMP clients.
+- **wampy.js compatible** — designed to work with [wampy.js](https://github.com/KSDaemon/wampy.js) and other WAMP clients.
 
 ## Architecture
 
@@ -282,7 +282,7 @@ Clients can then connect with the `wamp.2.msgpack` subprotocol.
 
 ## Clients Compatibility
 
-This library is designed to be compatible with [wampy.js](https://github.com/nicola/wampy.js) and other standard WAMP clients. The server 
+This library is designed to be compatible with [wampy.js](https://github.com/KSDaemon/wampy.js) and other standard WAMP clients. The server 
 advertises the following WAMP role features:
 
 **Dealer features:**
